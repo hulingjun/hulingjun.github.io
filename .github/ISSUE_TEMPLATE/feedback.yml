@@ -1,0 +1,50 @@
+name: 使用反馈
+description: 用一分钟告诉我们，这个练习站哪里有帮助、哪里可以更好。
+title: "[反馈] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢你体验「高难度沟通练习站 1.0」。你的反馈会直接帮助课程继续迭代。
+  - type: dropdown
+    id: helpful
+    attributes:
+      label: 这次体验对你有多大帮助？
+      options: [非常有帮助, 有一些帮助, 暂时没有帮助, 还不确定]
+    validations:
+      required: true
+  - type: checkboxes
+    id: useful-parts
+    attributes:
+      label: 哪些部分最有帮助？
+      options:
+        - label: 内容、模式、关系、流程
+        - label: 事实、想象、情绪、行为
+        - label: 深夜咨询与共情案例
+        - label: 沉默与暴力
+        - label: 互动题和审视练习台
+  - type: textarea
+    id: takeaway
+    attributes:
+      label: 你最大的收获是什么？
+      placeholder: 一句话也可以。
+    validations:
+      required: true
+  - type: textarea
+    id: improve
+    attributes:
+      label: 哪个地方不清楚，或者最希望我们改进什么？
+      placeholder: 概念、案例、练习方式、页面体验都可以。
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 你还希望增加什么沟通场景？
+      placeholder: 例如：向上沟通、伴侣冲突、亲子边界、客户投诉……
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我知道这条反馈会作为公开 GitHub Issue 提交，请勿填写隐私信息。
+          required: true
