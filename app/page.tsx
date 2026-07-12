@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { goalConcepts, goalScenarios, innerConcepts, innerRelations } from "./content";
+import "./nav-mobile.css";
 
 type DraftCard = { title: string; front: string; back: string };
 type SavedCard = DraftCard & { id: string; createdAt: string };
@@ -77,12 +78,12 @@ function CardDialog({ draft, onClose, onSaved }: { draft: DraftCard | null; onCl
 
 export default function Home() {
   const [draftCard, setDraftCard] = useState<DraftCard | null>(null);
-  const [cards, setCards] = useState<SavedCard[]>([]); const [drawerOpen, setDrawerOpen] = useState(false); const [completed, setCompleted] = useState<string[]>([]);
+  const [cards, setCards] = useState<SavedCard[]>([]); const [drawerOpen, setDrawerOpen] = useState(false); const [mobileOpen, setMobileOpen] = useState(false); const [completed, setCompleted] = useState<string[]>([]);
   const refreshCards = () => setCards(readCards());
   useEffect(() => { refreshCards(); try { setCompleted(JSON.parse(localStorage.getItem("dc-progress") ?? "[]")); } catch { setCompleted([]); } }, []);
   const toggleComplete = (id: string) => { const next = completed.includes(id) ? completed.filter((item) => item !== id) : [...completed, id]; setCompleted(next); localStorage.setItem("dc-progress", JSON.stringify(next)); };
   const progress = Math.round((completed.length / 2) * 100);
-  return <main><nav className="nav"><a className="brand" href="#top"><span className="brand-mark">•••</span><span>高难度沟通</span><b>alpha-2d-1.0</b></a><div className="nav-links"><a href="#units">学习地图</a><a href="#unit-a">审视自己</a><a href="#unit-b">沟通目标</a><a href="/3d-alpha">3D Alpha</a></div><div className="nav-tools"><button onClick={() => setDrawerOpen(true)}>我的卡片 <b>{cards.length}</b></button><a className="nav-cta" href="#units">进度 {progress}%</a></div></nav>
+  return <main><nav className={`nav ${mobileOpen ? "menu-open" : ""}`}><a className="brand" href="#top" onClick={() => setMobileOpen(false)}><span className="brand-mark">•••</span><span>高难度沟通</span><b>alpha-2d-1.0</b></a><div className="nav-links"><a href="#units">学习地图</a><a href="#unit-a">审视自己</a><a href="#unit-b">沟通目标</a><a href="/3d-alpha">3D Alpha</a></div><div className="nav-tools"><button onClick={() => setDrawerOpen(true)}>我的卡片 <b>{cards.length}</b></button><a className="nav-cta" href="#units">进度 {progress}%</a><button className="mobile-menu-toggle" aria-expanded={mobileOpen} aria-controls="mobile-navigation" aria-label={mobileOpen ? "关闭导航菜单" : "打开导航菜单"} onClick={() => setMobileOpen(!mobileOpen)}><i /><i /><i /></button></div><div className="mobile-navigation" id="mobile-navigation"><a href="#units" onClick={() => setMobileOpen(false)}><span>01</span><b>学习地图</b><small>查看两个学习单元</small></a><a href="#unit-a" onClick={() => setMobileOpen(false)}><span>02</span><b>审视自己</b><small>事实、解释、情绪与行为</small></a><a href="#unit-b" onClick={() => setMobileOpen(false)}><span>03</span><b>沟通目标</b><small>内容、模式、关系与流程</small></a><a className="mobile-3d-entry" href="/3d-alpha"><span>3D</span><b>进入3D概念空间</b><small>alpha-3d-0.2 · 交互式学习</small></a></div></nav>
     <header className="learning-hero" id="top"><div><p className="eyebrow">概念学习站 · 2D稳定版</p><h1>先理解概念，<br />再练习表达</h1><p>这里不提供一套需要照抄的话术。你会先看见知识结构，再逐个理解概念、边界和关系，最后用真实案例建立自己的判断。</p><a className="hero-button" href="#unit-a">从“审视自己”开始 <span>→</span></a></div><div className="hero-visual"><span>事实</span><i>被解释</i><span>解释</span><i>影响</i><span>情绪</span><i>影响</i><span>行为</span><small>影响，不等于必然决定</small></div></header>
     <section className="unit-map" id="units"><div className="section-heading"><p className="eyebrow">Learning Units</p><h2>两条学习路径，一套知识结构</h2><p>每个单元都是一组需要一起理解的最小概念和关系。</p></div><div className="unit-cards"><a href="#unit-a"><span>01 · 已开放</span><h3>审视事实、解释、情绪与行为</h3><p>理解内在反应是怎样形成的，并重新获得行为选择。</p><b>6个概念 · 5条关系 →</b></a><a href="#unit-b"><span>02 · 已开放</span><h3>明确真正的沟通目标</h3><p>区分内容、模式、关系与流程，找到这次沟通真正要改变什么。</p><b>{goalConcepts.length}个概念 · 5个情境 →</b></a></div></section>
     <section className="learning-unit" id="unit-a"><div className="unit-header"><div><p className="eyebrow">Learning Unit 01</p><h2>审视事实、解释、情绪与行为</h2></div><p>目标不是消除情绪，而是看见自己从事实走向行为的过程。看见之后，你才有重新选择的空间。</p></div><div className="overview-model"><div className="model-chain"><span>事实</span><i>被人赋予含义</i><span>解释</span><i>影响</i><span>情绪</span><i>影响</i><span>行为</span></div><div className="model-support"><span>共情</span><i>帮助修正解释</i><span>对话安全感</span></div><p>这是一条有方向、非确定性的影响链，不是加法公式。</p></div>
