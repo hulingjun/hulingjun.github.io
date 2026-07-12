@@ -1,0 +1,92 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { goalConcepts, goalScenarios, innerConcepts, innerRelations } from "./content";
+
+type DraftCard = { title: string; front: string; back: string };
+type SavedCard = DraftCard & { id: string; createdAt: string };
+
+function readCards(): SavedCard[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem("dc-cards") ?? "[]"); } catch { return []; }
+}
+
+function downloadText(name: string, content: string, type = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([content], { type })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 800);
+}
+
+function html(value: string) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("\n", "<br>"); }
+
+function CardLibrary({ open, cards, onClose, onChange }: { open: boolean; cards: SavedCard[]; onClose: () => void; onChange: () => void }) {
+  if (!open) return null;
+  const remove = (id: string) => { localStorage.setItem("dc-cards", JSON.stringify(cards.filter((card) => card.id !== id))); onChange(); };
+  const exportAnki = () => { const lines = ["#separator:tab", "#html:true", "#notetype:Basic", "#deck:高难度沟通", "#columns:Front\tBack\tTags", ...cards.map((card) => `"${html(card.front).replaceAll('"', '""')}"\t"${html(card.back).replaceAll('"', '""')}"\t"高难度沟通 dc-note::${card.id}"`)]; downloadText(`高难度沟通-basic-${new Date().toISOString().slice(0, 10)}.txt`, lines.join("\n") + "\n"); };
+  return <div className="drawer-backdrop" onMouseDown={onClose}><aside className="card-drawer" onMouseDown={(event) => event.stopPropagation()}><div className="drawer-head"><div><p className="eyebrow">MY CARDS</p><h2>我的卡片</h2></div><button onClick={onClose}>×</button></div><p className="drawer-note">卡片保存在当前浏览器。它们是学习后的可选工具，不代替概念理解。</p>{cards.length === 0 ? <div className="empty-cards">还没有卡片。你可以在概念或关系详情末尾制作。</div> : <div className="saved-card-list">{cards.map((card) => <article key={card.id}><span>{card.title}</span><h3>{card.front}</h3><p>{card.back}</p><button onClick={() => remove(card.id)}>删除</button></article>)}</div>}<div className="drawer-actions"><button disabled={cards.length === 0} onClick={exportAnki}>导出Anki Basic</button><button disabled={cards.length === 0} onClick={() => downloadText(`高难度沟通-卡片备份-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ format: "difficult-conversations-cards", version: 1, cards }, null, 2), "application/json;charset=utf-8")}>JSON备份</button></div></aside></div>;
+}
+
+function ConceptExplorer({ onMakeCard }: { onMakeCard: (card: DraftCard) => void }) {
+  const [activeId, setActiveId] = useState(innerConcepts[0].id);
+  const active = useMemo(() => innerConcepts.find((item) => item.id === activeId)!, [activeId]);
+  return <div className="concept-explorer"><div className="concept-tabs" role="tablist" aria-label="核心概念">{innerConcepts.map((concept, index) => <button key={concept.id} className={activeId === concept.id ? "active" : ""} onClick={() => setActiveId(concept.id)}><span>0{index + 1}</span><strong>{concept.title}</strong><small>{concept.cue}</small></button>)}</div><article className="concept-sheet" style={{ "--concept-accent": active.accent } as React.CSSProperties}><div className="concept-lead"><p>KNOWLEDGE ENTITY</p><h3>{active.title}</h3><strong>{active.summary}</strong><p>{active.definition}</p></div><div className="boundary-grid"><div><span>它包括</span><ul>{active.includes.map((item) => <li key={item}>{item}</li>)}</ul></div><div><span>它不包括</span><ul>{active.excludes.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="example-pair"><blockquote><span>正例</span>{active.example}</blockquote><blockquote className="counter"><span>反例</span>{active.counterExample}</blockquote></div><div className="misconception"><span>常见误解</span><b>{active.misconception}</b><p>{active.correction}</p></div><button className="make-card" onClick={() => onMakeCard({ title: active.title, front: `什么是“${active.title}”？`, back: `${active.definition}\n\n边界：${active.excludes.join("、")}` })}>制作概念卡 <span>＋</span></button></article></div>;
+}
+
+function RelationPath({ onMakeCard }: { onMakeCard: (card: DraftCard) => void }) {
+  const [activeId, setActiveId] = useState(innerRelations[0].id);
+  const active = innerRelations.find((item) => item.id === activeId)!;
+  return <div className="relation-section"><div className="relation-map" aria-label="概念关系图"><div className="main-chain">{innerRelations.slice(0, 3).map((relation, index) => <div className="chain-segment" key={relation.id}>{index === 0 && <button className={activeId === relation.id ? "active" : ""} onClick={() => setActiveId(relation.id)}>{relation.from}</button>}<button className="edge" onClick={() => setActiveId(relation.id)}><span>{relation.verb}</span>→</button><button className={activeId === relation.id ? "active" : ""} onClick={() => setActiveId(relation.id)}>{relation.to}</button></div>)}</div><div className="support-chain">{innerRelations.slice(3).map((relation) => <button key={relation.id} className={activeId === relation.id ? "active" : ""} onClick={() => setActiveId(relation.id)}><b>{relation.from}</b><span>{relation.verb}</span><b>{relation.to}</b></button>)}</div></div><article className="relation-detail"><p>当前关系</p><h3>{active.from}<span>{active.verb}</span>{active.to}</h3><strong>{active.proposition}</strong>{active.qualification && <blockquote>{active.qualification}</blockquote>}<button className="make-card" onClick={() => onMakeCard({ title: `${active.from} → ${active.to}`, front: `${active.from}和${active.to}之间是什么关系？`, back: `${active.proposition}${active.qualification ? `\n\n注意：${active.qualification}` : ""}` })}>制作关系卡 <span>＋</span></button></article></div>;
+}
+
+function DeepNightCase() {
+  const [step, setStep] = useState(0);
+  const caseSteps = [
+    { label: "事实", question: "摄像机能记录什么？", answer: "用户连续三天在晚上11点之后发来咨询消息。" },
+    { label: "解释", question: "我给事实添加了什么含义？", answer: "他不尊重我的时间；或者他可能只有深夜才方便。两种都是待核实的解释。" },
+    { label: "情绪", question: "这些解释分别带来什么感受？", answer: "第一种解释可能带来愤怒和委屈；第二种可能带来理解，同时仍感到疲惫。" },
+    { label: "行为", question: "情绪正在推动我怎么做？", answer: "可能冷淡、讽刺或不回复；也可以选择第二天说明边界并询问对方的时间情况。" },
+    { label: "共情与安全", question: "怎样让真实信息继续流动？", answer: "先承认自己还不知道原因，再询问情况，同时明确自己的服务时间。" },
+  ];
+  return <div className="case-lab"><div className="case-copy"><p className="eyebrow">贯穿案例</p><h3>用户总在半夜找你咨询</h3><p>不要急着寻找一句标准话术。沿着概念关系，一步步观察自己的内在过程。</p><div className="case-progress">{caseSteps.map((item, index) => <button key={item.label} className={index <= step ? "active" : ""} onClick={() => setStep(index)}><span>{index + 1}</span>{item.label}</button>)}</div></div><article className="case-answer"><span>STEP {step + 1}</span><h4>{caseSteps[step].question}</h4><p>{caseSteps[step].answer}</p>{step < caseSteps.length - 1 ? <button onClick={() => setStep(step + 1)}>继续下一步 →</button> : <strong>你已经完成了一次完整的自我审视。</strong>}</article></div>;
+}
+
+function ReflectionDesk() {
+  const [values, setValues] = useState({ fact: "", interpretation: "", emotion: "", choice: "" });
+  const fields = [{ key: "fact", label: "事实", placeholder: "只写可以观察或核实的内容" }, { key: "interpretation", label: "解释", placeholder: "我给这件事添加了什么含义" }, { key: "emotion", label: "情绪", placeholder: "直接命名情绪，而不是评价" }, { key: "choice", label: "新的行为选择", placeholder: "怎样兼顾核实、共情和边界" }] as const;
+  return <div className="reflection-desk"><div><p className="eyebrow">用自己的话总结</p><h3>把最近一次自动反应拆开</h3><p>这里没有自动评分。写下来的过程本身，就是从自动反应走向主动选择。</p></div><div className="reflection-grid">{fields.map((field) => <label key={field.key}>{field.label}<textarea value={values[field.key]} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} placeholder={field.placeholder} /></label>)}</div></div>;
+}
+
+function GoalExplorer({ onMakeCard }: { onMakeCard: (card: DraftCard) => void }) {
+  const [activeId, setActiveId] = useState(goalConcepts[0].id);
+  const active = goalConcepts.find((item) => item.id === activeId)!;
+  return <div className="goal-explorer"><div className="goal-orbit">{goalConcepts.map((concept) => <button key={concept.id} className={active.id === concept.id ? "active" : ""} style={{ "--goal-accent": concept.accent } as React.CSSProperties} onClick={() => setActiveId(concept.id)}><span>{concept.title}</span><small>{concept.cue}</small></button>)}<div className="orbit-center"><span>沟通目标</span><small>我真正希望改变、澄清或保护什么？</small></div></div><article className="goal-detail" style={{ "--goal-accent": active.accent } as React.CSSProperties}><p className="eyebrow">PRIMARY FOCUS</p><h3>{active.title}</h3><strong>{active.summary}</strong><p>{active.definition}</p><div className="goal-boundaries"><div><span>关注</span>{active.includes.map((item) => <p key={item}>✓ {item}</p>)}</div><div><span>不等于</span>{active.excludes.map((item) => <p key={item}>× {item}</p>)}</div></div><blockquote><b>例子</b>{active.example}</blockquote><div className="misconception"><span>常见误解</span><b>{active.misconception}</b><p>{active.correction}</p></div><button className="make-card" onClick={() => onMakeCard({ title: active.title, front: `沟通目标中的“${active.title}”指什么？`, back: `${active.definition}\n\n关注：${active.includes.join("、")}` })}>制作概念卡 <span>＋</span></button></article></div>;
+}
+
+function GoalScenarioLab() {
+  const [scenarioId, setScenarioId] = useState(goalScenarios[0].id);
+  const [selected, setSelected] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const scenario = goalScenarios.find((item) => item.id === scenarioId)!;
+  const chooseScenario = (id: string) => { setScenarioId(id); setSelected(""); setRevealed(false); };
+  return <div className="goal-lab"><div className="scenario-list"><p className="eyebrow">选择案例</p>{goalScenarios.map((item) => <button key={item.id} className={item.id === scenarioId ? "active" : ""} onClick={() => chooseScenario(item.id)}><span>{item.title}</span><small>{item.text}</small></button>)}</div><article className="scenario-work"><span>你真正希望改变什么？</span><h3>{scenario.text}</h3><div className="goal-choice-row">{goalConcepts.map((concept) => <button key={concept.title} className={selected === concept.title ? "active" : ""} onClick={() => { setSelected(concept.title); setRevealed(false); }}>{concept.title}</button>)}</div><label>我的选择依据<textarea placeholder="不是给事件贴标签，而是说明这次沟通希望改变什么……" /></label><button className="reveal-button" disabled={!selected} onClick={() => setRevealed(true)}>查看参考分析</button>{revealed && <div className="reference-answer"><p><span>参考主要目标</span><b>{scenario.primary}</b></p>{scenario.secondary.length > 0 && <p><span>可能的次要目标</span><b>{scenario.secondary.join("、")}</b></p>}<blockquote>{scenario.rationale}</blockquote><small>{selected === scenario.primary ? "你的选择与参考主要目标一致。" : `你选择了“${selected}”。它不一定错误，关键是你的依据是否明确指向希望改变的对象。`}</small></div>}</article></div>;
+}
+
+function CardDialog({ draft, onClose, onSaved }: { draft: DraftCard | null; onClose: () => void; onSaved: () => void }) {
+  const [front, setFront] = useState(draft?.front ?? ""); const [back, setBack] = useState(draft?.back ?? "");
+  if (!draft) return null;
+  return <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}><div className="card-dialog" role="dialog" aria-modal="true" aria-label="制作学习卡片" onMouseDown={(event) => event.stopPropagation()}><button className="dialog-close" onClick={onClose}>×</button><p className="eyebrow">可选学习工具</p><h3>制作{draft.title}卡片</h3><p>系统已经预填，但最终内容应该来自你的理解。</p><label>正面<textarea value={front} onChange={(event) => setFront(event.target.value)} /></label><label>背面<textarea value={back} onChange={(event) => setBack(event.target.value)} /></label><div className="mini-preview"><div><span>正面</span>{front}</div><div><span>背面</span>{back}</div></div><button className="primary-button" disabled={!front.trim() || !back.trim()} onClick={() => { const cards = readCards(); cards.push({ id: crypto.randomUUID(), title: draft.title, front, back, createdAt: new Date().toISOString() }); localStorage.setItem("dc-cards", JSON.stringify(cards)); onSaved(); onClose(); }}>保存到我的卡片</button></div></div>;
+}
+
+export default function Home() {
+  const [draftCard, setDraftCard] = useState<DraftCard | null>(null);
+  const [cards, setCards] = useState<SavedCard[]>([]); const [drawerOpen, setDrawerOpen] = useState(false); const [completed, setCompleted] = useState<string[]>([]);
+  const refreshCards = () => setCards(readCards());
+  useEffect(() => { refreshCards(); try { setCompleted(JSON.parse(localStorage.getItem("dc-progress") ?? "[]")); } catch { setCompleted([]); } }, []);
+  const toggleComplete = (id: string) => { const next = completed.includes(id) ? completed.filter((item) => item !== id) : [...completed, id]; setCompleted(next); localStorage.setItem("dc-progress", JSON.stringify(next)); };
+  const progress = Math.round((completed.length / 2) * 100);
+  return <main><nav className="nav"><a className="brand" href="#top"><span className="brand-mark">•••</span><span>高难度沟通</span><b>alpha-2d-1.0</b></a><div className="nav-links"><a href="#units">学习地图</a><a href="#unit-a">审视自己</a><a href="#unit-b">沟通目标</a><a href="/3d-alpha">3D Alpha</a></div><div className="nav-tools"><button onClick={() => setDrawerOpen(true)}>我的卡片 <b>{cards.length}</b></button><a className="nav-cta" href="#units">进度 {progress}%</a></div></nav>
+    <header className="learning-hero" id="top"><div><p className="eyebrow">概念学习站 · 2D稳定版</p><h1>先理解概念，<br />再练习表达</h1><p>这里不提供一套需要照抄的话术。你会先看见知识结构，再逐个理解概念、边界和关系，最后用真实案例建立自己的判断。</p><a className="hero-button" href="#unit-a">从“审视自己”开始 <span>→</span></a></div><div className="hero-visual"><span>事实</span><i>被解释</i><span>解释</span><i>影响</i><span>情绪</span><i>影响</i><span>行为</span><small>影响，不等于必然决定</small></div></header>
+    <section className="unit-map" id="units"><div className="section-heading"><p className="eyebrow">Learning Units</p><h2>两条学习路径，一套知识结构</h2><p>每个单元都是一组需要一起理解的最小概念和关系。</p></div><div className="unit-cards"><a href="#unit-a"><span>01 · 已开放</span><h3>审视事实、解释、情绪与行为</h3><p>理解内在反应是怎样形成的，并重新获得行为选择。</p><b>6个概念 · 5条关系 →</b></a><a href="#unit-b"><span>02 · 已开放</span><h3>明确真正的沟通目标</h3><p>区分内容、模式、关系与流程，找到这次沟通真正要改变什么。</p><b>{goalConcepts.length}个概念 · 5个情境 →</b></a></div></section>
+    <section className="learning-unit" id="unit-a"><div className="unit-header"><div><p className="eyebrow">Learning Unit 01</p><h2>审视事实、解释、情绪与行为</h2></div><p>目标不是消除情绪，而是看见自己从事实走向行为的过程。看见之后，你才有重新选择的空间。</p></div><div className="overview-model"><div className="model-chain"><span>事实</span><i>被人赋予含义</i><span>解释</span><i>影响</i><span>情绪</span><i>影响</i><span>行为</span></div><div className="model-support"><span>共情</span><i>帮助修正解释</i><span>对话安全感</span></div><p>这是一条有方向、非确定性的影响链，不是加法公式。</p></div>
+      <div id="concepts"><div className="section-heading compact"><p className="eyebrow">Part 1 · 概念</p><h2>先把每个词理解清楚</h2><p>点击概念，比较它包括什么、不包括什么，以及最容易出现的误解。</p></div><ConceptExplorer onMakeCard={setDraftCard} /></div><div id="relations"><div className="section-heading compact"><p className="eyebrow">Part 2 · 关系</p><h2>概念不是孤立的卡片</h2><p>真正有用的是看见它们如何连接，以及每一条关系的限定条件。</p></div><RelationPath onMakeCard={setDraftCard} /></div><div id="case"><div className="section-heading compact"><p className="eyebrow">Part 3 · 案例</p><h2>用同一个案例走完整条链</h2></div><DeepNightCase /></div><div id="reflection"><div className="section-heading compact"><p className="eyebrow">Part 4 · 内化</p><h2>把知识带回自己的经历</h2></div><ReflectionDesk /></div><div className={`completion-panel ${completed.includes("unit-a") ? "done" : ""}`}><div><span>{completed.includes("unit-a") ? "✓ 已完成" : "完成本单元"}</span><p>当你能够用自己的话说明有向影响链，并愿意审视一个真实经历，就可以标记完成。</p></div><button onClick={() => toggleComplete("unit-a")}>{completed.includes("unit-a") ? "取消完成" : "标记为已完成"}</button></div></section>
+    <section className="learning-unit goal-unit" id="unit-b"><div className="unit-header"><div><p className="eyebrow">Learning Unit 02</p><h2>明确真正的沟通目标</h2></div><p>沟通目标不是“我要说什么”，而是“我希望这次对话改变、澄清或保护什么”。一个场景可以有多个目标，但需要先看清主要关注点。</p></div><div className="goal-overview"><div><span>沟通目标</span><b>可以指向</b></div>{goalConcepts.map((concept) => <article key={concept.id} style={{ "--goal-accent": concept.accent } as React.CSSProperties}><strong>{concept.title}</strong><small>{concept.cue}</small></article>)}</div><div className="section-heading compact"><p className="eyebrow">Part 1 · 概念边界</p><h2>不是给事件贴标签</h2><p>分类的关键不是事件看起来像什么，而是你真正希望通过这次沟通改变什么。</p></div><GoalExplorer onMakeCard={setDraftCard} /><div className="boundary-compare"><div><span>内容 vs 模式</span><p>内容问“这一次发生了什么”；模式问“反复发生了什么”。</p></div><div><span>模式 vs 流程</span><p>模式描述重复行为；流程描述共同处理事情的机制。</p></div><div><span>关系 vs 流程</span><p>关系关注双方状态；流程关注双方如何一起沟通和做事。</p></div></div><div className="section-heading compact"><p className="eyebrow">Part 2 · 目标选择</p><h2>同一个场景，可以有多个合理答案</h2><p>先选择一个主要目标，再说明次要目标和你的依据。系统提供参考分析，而不是唯一标准答案。</p></div><GoalScenarioLab /><div className={`completion-panel ${completed.includes("unit-b") ? "done" : ""}`}><div><span>{completed.includes("unit-b") ? "✓ 已完成" : "完成本单元"}</span><p>当你能够区分四类目标，并为一个复杂场景说明主要目标和依据，就可以标记完成。</p></div><button onClick={() => toggleComplete("unit-b")}>{completed.includes("unit-b") ? "取消完成" : "标记为已完成"}</button></div></section>
+    <section className="three-d-callout" id="three-d"><div><p className="eyebrow">3D ALPHA · 0.2</p><h2>进入三维概念空间</h2><p>使用与2D版相同的知识数据，通过清晰的概念图谱、路径和案例动画理解概念之间的有向影响。</p></div><a href="/3d-alpha">体验 alpha-3d-0.2 →</a></section><section className="next-unit"><p className="eyebrow">Two Units Complete</p><h2>目标决定方向，审视带来选择。</h2><p>你可以继续复习概念、整理自己的案例，或者把真正想记住的内容制作成卡片。</p><button onClick={() => setDrawerOpen(true)}>打开我的卡片</button></section><footer><span>高难度沟通学习站 · alpha-2d-1.0</span><p>当前进度 {progress}% · 卡片 {cards.length} 张</p></footer><CardDialog key={draftCard?.title ?? "empty"} draft={draftCard} onClose={() => setDraftCard(null)} onSaved={refreshCards} /><CardLibrary open={drawerOpen} cards={cards} onClose={() => setDrawerOpen(false)} onChange={refreshCards} /></main>;
+}
