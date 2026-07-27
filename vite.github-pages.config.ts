@@ -9,6 +9,12 @@ export default defineConfig({
   build: {
     outDir: "../github-dist",
     emptyOutDir: true,
-    rollupOptions: { input: { home: resolve(__dirname, "github-pages/index.html"), alpha3d: resolve(__dirname, "github-pages/3d-alpha/index.html") } },
+    rollupOptions: {
+      input: {
+        home: resolve(__dirname, "github-pages/index.html"),
+        alpha3d: resolve(__dirname, "github-pages/3d-alpha/index.html"),
+        knowledge: resolve(__dirname, "github-pages/knowledge/index.html"),
+      },
+    },
   },
 });
