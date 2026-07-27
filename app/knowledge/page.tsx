@@ -170,11 +170,24 @@ export default function KnowledgeEditor() {
     if (measured.length || removed.size) {
       setNodeMeasurements((current) => {
         const next = { ...current };
+        let changed = false;
         for (const change of measured) {
-          if (change.type === "dimensions") next[change.id] = change.dimensions;
+          if (
+            change.type === "dimensions" &&
+            (current[change.id]?.width !== change.dimensions.width ||
+              current[change.id]?.height !== change.dimensions.height)
+          ) {
+            next[change.id] = change.dimensions;
+            changed = true;
+          }
         }
-        for (const id of removed) delete next[id];
-        return next;
+        for (const id of removed) {
+          if (id in next) {
+            delete next[id];
+            changed = true;
+          }
+        }
+        return changed ? next : current;
       });
     }
     setGraph((current) => ({
