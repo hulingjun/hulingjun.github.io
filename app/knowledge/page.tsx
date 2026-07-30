@@ -768,6 +768,7 @@ export default function KnowledgeEditor() {
             onEdgesChange={onEdgesChange}
             onConnect={connect}
             onReconnect={reconnectRelation}
+            connectionRadius={18}
             reconnectRadius={20}
             onNodeDragStart={() => {
               dragStartGraphRef.current = graphRef.current;
