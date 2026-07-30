@@ -34,6 +34,7 @@ import "./knowledge.css";
 
 const STORAGE_KEY = "knowledge-structure-editor-v1";
 const COLLAPSED_KEY = "knowledge-structure-editor-collapsed-v1";
+const INSPECTOR_KEY = "knowledge-structure-editor-inspector-collapsed-v1";
 const NODE_WIDTH = 190;
 const NODE_HEIGHT = 100;
 const NODE_GAP_X = 76;
@@ -79,7 +80,7 @@ const KnowledgeNodeCard = memo(function KnowledgeNodeCard({
 
   return (
     <div className={`knowledge-node-card ${selected ? "selected" : ""}`}>
-      <Handle type="target" position={Position.Left} className="knowledge-handle" />
+      <Handle id="left" type="target" position={Position.Left} className="knowledge-handle" />
       <Handle id="top" type="source" position={Position.Top} className="knowledge-handle" />
       <Handle id="bottom" type="source" position={Position.Bottom} className="knowledge-handle" />
       {data.editing ? (
@@ -113,7 +114,7 @@ const KnowledgeNodeCard = memo(function KnowledgeNodeCard({
           {data.collapsed ? "+" : "−"}
         </button>
       ) : null}
-      <Handle type="source" position={Position.Right} className="knowledge-handle" />
+      <Handle id="right" type="source" position={Position.Right} className="knowledge-handle" />
     </div>
   );
 });
@@ -218,6 +219,10 @@ function readCollapsedNodes() {
   }
 }
 
+function readInspectorCollapsed() {
+  return localStorage.getItem(INSPECTOR_KEY) === "true";
+}
+
 function overlaps(point: Point, nodes: KnowledgeNode[]) {
   const padding = 18;
   return nodes.some(
@@ -239,21 +244,28 @@ export default function KnowledgeEditor() {
   const [nodeMeasurements, setNodeMeasurements] = useState<Record<string, { width?: number; height?: number }>>({});
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState("");
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const copiedNodeRef = useRef<KnowledgeNode | null>(null);
   const lastNodeIdRef = useRef<string | null>(null);
+  const graphRef = useRef<KnowledgeGraph>(graph);
+  const undoStackRef = useRef<KnowledgeGraph[]>([]);
+  const redoStackRef = useRef<KnowledgeGraph[]>([]);
+  const dragStartGraphRef = useRef<KnowledgeGraph | null>(null);
 
   useEffect(() => {
     const storedGraph = readStoredGraph();
     setGraph(storedGraph);
     lastNodeIdRef.current = storedGraph.nodes.at(-1)?.id ?? null;
     setCollapsedNodeIds(readCollapsedNodes());
+    setInspectorCollapsed(readInspectorCollapsed());
     setReady(true);
   }, []);
 
   useEffect(() => {
+    graphRef.current = graph;
     if (ready) localStorage.setItem(STORAGE_KEY, JSON.stringify(graph));
   }, [graph, ready]);
 
@@ -261,24 +273,74 @@ export default function KnowledgeEditor() {
     if (ready) localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedNodeIds]));
   }, [collapsedNodeIds, ready]);
 
+  useEffect(() => {
+    if (ready) localStorage.setItem(INSPECTOR_KEY, String(inspectorCollapsed));
+  }, [inspectorCollapsed, ready]);
+
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 1400);
   }, []);
 
+  const recordHistory = useCallback((snapshot: KnowledgeGraph) => {
+    const stack = undoStackRef.current;
+    if (stack.at(-1) === snapshot) return;
+    stack.push(snapshot);
+    if (stack.length > 80) stack.shift();
+    redoStackRef.current = [];
+  }, []);
+
+  const commitGraph = useCallback((updater: (current: KnowledgeGraph) => KnowledgeGraph) => {
+    setGraph((current) => {
+      const next = updater(current);
+      if (next !== current) recordHistory(current);
+      return next;
+    });
+  }, [recordHistory]);
+
+  const undo = useCallback(() => {
+    const previous = undoStackRef.current.pop();
+    if (!previous) {
+      showNotice("没有可以撤销的操作");
+      return;
+    }
+    redoStackRef.current.push(graphRef.current);
+    graphRef.current = previous;
+    setGraph(previous);
+    setSelection({ kind: "canvas" });
+    setEditingNodeId(null);
+    setEditingRelationId(null);
+    showNotice("已撤销上一步");
+  }, [showNotice]);
+
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop();
+    if (!next) {
+      showNotice("没有可以重做的操作");
+      return;
+    }
+    undoStackRef.current.push(graphRef.current);
+    graphRef.current = next;
+    setGraph(next);
+    setSelection({ kind: "canvas" });
+    setEditingNodeId(null);
+    setEditingRelationId(null);
+    showNotice("已重做操作");
+  }, [showNotice]);
+
   const updateNodeText = useCallback((id: string, text: string) => {
-    setGraph((current) => ({
+    commitGraph((current) => ({
       ...current,
       nodes: current.nodes.map((node) => (node.id === id ? { ...node, text } : node)),
     }));
-  }, []);
+  }, [commitGraph]);
 
   const updateRelationText = useCallback((id: string, label: string) => {
-    setGraph((current) => ({
+    commitGraph((current) => ({
       ...current,
       relations: current.relations.map((relation) => (relation.id === id ? { ...relation, label } : relation)),
     }));
-  }, []);
+  }, [commitGraph]);
 
   const outgoingByNode = useMemo(() => {
     const outgoing = new Map<string, string[]>();
@@ -354,9 +416,10 @@ export default function KnowledgeEditor() {
         id: relation.id,
         source: relation.sourceId,
         target: relation.targetId,
-        sourceHandle: relation.sourceHandle,
-        targetHandle: relation.targetHandle,
+        sourceHandle: relation.sourceHandle ?? "right",
+        targetHandle: relation.targetHandle ?? "left",
         type: "knowledge",
+        reconnectable: true,
         hidden: hiddenNodeIds.has(relation.sourceId) || hiddenNodeIds.has(relation.targetId),
         selected: selection?.kind === "relation" && selection.id === relation.id,
         markerEnd: { type: MarkerType.ArrowClosed, color: "#758b86" },
@@ -434,52 +497,64 @@ export default function KnowledgeEditor() {
       selection?.kind === "node" ? selection.id : lastNodeIdRef.current ?? graph.nodes.at(-1)?.id;
     const anchor = graph.nodes.find((node) => node.id === anchorId)?.position ?? null;
     const position = findOpenPosition(anchor, graph.nodes);
-    setGraph((current) => ({
+    commitGraph((current) => ({
       ...current,
       nodes: [...current.nodes, { id, text: "新概念", position }],
     }));
     lastNodeIdRef.current = id;
     setSelection({ kind: "node", id });
     setEditingNodeId(id);
-  }, [findOpenPosition, graph.nodes, selection]);
+  }, [commitGraph, findOpenPosition, graph.nodes, selection]);
 
   const pasteCopiedNode = useCallback(() => {
     const copiedNode = copiedNodeRef.current;
     if (!copiedNode) return;
     const id = crypto.randomUUID();
     const position = findOpenPosition(copiedNode.position, graph.nodes);
-    setGraph((current) => ({
+    commitGraph((current) => ({
       ...current,
       nodes: [...current.nodes, { id, text: copiedNode.text, position }],
     }));
     lastNodeIdRef.current = id;
     setSelection({ kind: "node", id });
     showNotice("节点已粘贴到最近空位");
-  }, [findOpenPosition, graph.nodes, showNotice]);
+  }, [commitGraph, findOpenPosition, graph.nodes, showNotice]);
 
   useEffect(() => {
     const handleClipboard = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.matches("input, textarea, [contenteditable='true']")) return;
       if (!(event.metaKey || event.ctrlKey)) return;
-      if (event.key.toLowerCase() === "c" && selection?.kind === "node") {
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+      if ((key === "z" && event.shiftKey) || key === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (key === "c" && selection?.kind === "node") {
         const node = graph.nodes.find((item) => item.id === selection.id);
         if (!node) return;
         event.preventDefault();
         copiedNodeRef.current = { ...node, position: { ...node.position } };
         showNotice("节点已复制");
       }
-      if (event.key.toLowerCase() === "v" && copiedNodeRef.current) {
+      if (key === "v" && copiedNodeRef.current) {
         event.preventDefault();
         pasteCopiedNode();
       }
     };
     window.addEventListener("keydown", handleClipboard);
     return () => window.removeEventListener("keydown", handleClipboard);
-  }, [graph.nodes, pasteCopiedNode, selection, showNotice]);
+  }, [graph.nodes, pasteCopiedNode, redo, selection, showNotice, undo]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const removed = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
+    if (removed.size) recordHistory(graphRef.current);
     const measured = changes.filter((change) => change.type === "dimensions");
     if (measured.length || removed.size) {
       setNodeMeasurements((current) => {
@@ -530,10 +605,11 @@ export default function KnowledgeEditor() {
     if (removed.has(selection?.kind === "node" || selection?.kind === "relation" ? selection.id : "")) {
       setSelection({ kind: "canvas" });
     }
-  }, [selection]);
+  }, [recordHistory, selection]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     const removed = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
+    if (removed.size) recordHistory(graphRef.current);
     if (removed.size) {
       setGraph((current) => ({
         ...current,
@@ -545,7 +621,27 @@ export default function KnowledgeEditor() {
     );
     if (selectedChange) setSelection({ kind: "relation", id: selectedChange.id });
     if (selection?.kind === "relation" && removed.has(selection.id)) setSelection({ kind: "canvas" });
-  }, [selection]);
+  }, [recordHistory, selection]);
+
+  const reconnectRelation = useCallback((oldEdge: Edge, connection: Connection) => {
+    if (!connection.source || !connection.target || connection.source === connection.target) return;
+    commitGraph((current) => ({
+      ...current,
+      relations: current.relations.map((relation) =>
+        relation.id === oldEdge.id
+          ? {
+              ...relation,
+              sourceId: connection.source,
+              targetId: connection.target,
+              sourceHandle: connection.sourceHandle,
+              targetHandle: connection.targetHandle,
+            }
+          : relation,
+      ),
+    }));
+    setSelection({ kind: "relation", id: oldEdge.id });
+    showNotice("连接位置已更新");
+  }, [commitGraph, showNotice]);
 
   const connect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target || connection.source === connection.target) return;
@@ -557,14 +653,14 @@ export default function KnowledgeEditor() {
       targetHandle: connection.targetHandle,
       label: "",
     };
-    setGraph((current) => ({ ...current, relations: [...current.relations, relation] }));
+    commitGraph((current) => ({ ...current, relations: [...current.relations, relation] }));
     setSelection({ kind: "relation", id: relation.id });
     setEditingRelationId(relation.id);
-  }, []);
+  }, [commitGraph]);
 
   const removeSelection = () => {
     if (!selection || selection.kind === "canvas") return;
-    setGraph((current) =>
+    commitGraph((current) =>
       selection.kind === "node"
         ? {
             ...current,
@@ -585,7 +681,7 @@ export default function KnowledgeEditor() {
     for (const node of graph.nodes) layoutGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
     for (const relation of graph.relations) layoutGraph.setEdge(relation.sourceId, relation.targetId);
     dagre.layout(layoutGraph);
-    setGraph((current) => ({
+    commitGraph((current) => ({
       ...current,
       nodes: current.nodes.map((node) => {
         const placed = layoutGraph.node(node.id);
@@ -596,7 +692,7 @@ export default function KnowledgeEditor() {
     }));
     requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.22, duration: 420 }));
     showNotice("画布已从左到右对齐");
-  }, [graph.nodes, graph.relations, showNotice]);
+  }, [commitGraph, graph.nodes, graph.relations, showNotice]);
 
   const importGraph = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -604,7 +700,7 @@ export default function KnowledgeEditor() {
     try {
       const next = JSON.parse(await file.text());
       if (!isKnowledgeGraph(next)) throw new Error("invalid");
-      setGraph(next);
+      commitGraph(() => next);
       setCollapsedNodeIds(new Set);
       setSelection({ kind: "canvas" });
     } catch {
@@ -623,7 +719,7 @@ export default function KnowledgeEditor() {
           <input
             aria-label="知识结构标题"
             value={graph.title}
-            onChange={(event) => setGraph((current) => ({ ...current, title: event.target.value }))}
+            onChange={(event) => commitGraph((current) => ({ ...current, title: event.target.value }))}
           />
         </div>
         <div className="knowledge-header-actions">
@@ -646,11 +742,11 @@ export default function KnowledgeEditor() {
         </div>
       </header>
 
-      <section className="knowledge-workspace">
+      <section className={`knowledge-workspace ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
         <div className="knowledge-canvas-shell" ref={canvasShellRef}>
           <div className="knowledge-toolbar" aria-label="画布工具">
             <button className="primary" onClick={addNode}>＋ 添加节点</button>
-            <span>拖动连线 · 点击线条中点写关系 · Ctrl/Cmd+C、V 复制节点</span>
+            <span>拖动连线端点可改接 · Ctrl/Cmd+Z 撤销 · 点击线条中点写关系</span>
             {selection?.kind === "canvas" ? <button onClick={autoLayout}>一键排版</button> : null}
             <button
               disabled={!selection || selection.kind === "canvas"}
@@ -671,6 +767,16 @@ export default function KnowledgeEditor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={connect}
+            onReconnect={reconnectRelation}
+            reconnectRadius={20}
+            onNodeDragStart={() => {
+              dragStartGraphRef.current = graphRef.current;
+            }}
+            onNodeDragStop={() => {
+              const snapshot = dragStartGraphRef.current;
+              if (snapshot && snapshot !== graphRef.current) recordHistory(snapshot);
+              dragStartGraphRef.current = null;
+            }}
             onNodeClick={(_, node) => {
               setSelection({ kind: "node", id: node.id });
               lastNodeIdRef.current = node.id;
@@ -706,7 +812,17 @@ export default function KnowledgeEditor() {
           <div className="knowledge-save-state"><i /> 已自动保存在当前浏览器</div>
         </div>
 
-        <aside className="knowledge-inspector">
+        <aside className={`knowledge-inspector ${inspectorCollapsed ? "collapsed" : ""}`}>
+          <button
+            type="button"
+            className="inspector-toggle"
+            aria-label={inspectorCollapsed ? "展开右侧栏" : "折叠右侧栏"}
+            title={inspectorCollapsed ? "展开右侧栏" : "折叠右侧栏"}
+            onClick={() => setInspectorCollapsed((current) => !current)}
+          >
+            {inspectorCollapsed ? "‹" : "›"}
+          </button>
+          {!inspectorCollapsed ? <div className="knowledge-inspector-content">
           <div className="inspector-heading">
             <span>{selectedNode ? "NODE" : selectedRelation ? "RELATION" : selection?.kind === "canvas" ? "CANVAS" : "PLANTUML"}</span>
             <h2>
@@ -778,13 +894,14 @@ export default function KnowledgeEditor() {
             className="reset-demo"
             onClick={() => {
               if (!window.confirm("恢复《关键对话》示例？当前画布会被替换。建议先备份 JSON。")) return;
-              setGraph(cloneStarterGraph());
+              commitGraph(() => cloneStarterGraph());
               setCollapsedNodeIds(new Set);
               setSelection({ kind: "canvas" });
             }}
           >
             恢复《关键对话》示例
           </button>
+          </div> : null}
         </aside>
       </section>
     </main>
