@@ -8,6 +8,8 @@ export type KnowledgeRelation = {
   id: string;
   sourceId: string;
   targetId: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
   label: string;
 };
 
@@ -99,6 +101,8 @@ export function isKnowledgeGraph(value: unknown): value is KnowledgeGraph {
         typeof relation.id === "string" &&
         typeof relation.sourceId === "string" &&
         typeof relation.targetId === "string" &&
+        (relation.sourceHandle === undefined || relation.sourceHandle === null || typeof relation.sourceHandle === "string") &&
+        (relation.targetHandle === undefined || relation.targetHandle === null || typeof relation.targetHandle === "string") &&
         typeof relation.label === "string",
     )
   );
