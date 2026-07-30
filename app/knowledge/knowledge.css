@@ -23,15 +23,14 @@
 .knowledge-node-card{position:relative;display:grid;place-items:center;width:190px;height:100px;min-height:100px;overflow:visible;padding:16px 20px;border:1.5px solid #aab4b1;border-top:5px solid #919d99;border-radius:14px;background:#f5f6f5;box-shadow:0 12px 35px rgba(40,53,50,.09);color:#293936;text-align:center;font-size:16px;font-weight:900;white-space:pre-wrap;transition:border-color .16s,background .16s,box-shadow .16s}
 .knowledge-node-card.selected{border-color:#1d635b;border-top-color:#1d635b;background:#e9f5f0;box-shadow:0 0 0 3px rgba(29,99,91,.14),0 15px 38px rgba(30,67,61,.13)}
 .knowledge-node-card textarea{width:100%;height:62px;min-height:62px;padding:7px;border:1px solid #bdd0ca;border-radius:7px;background:#fff;color:#173336;text-align:center;font-weight:800;resize:none;outline:none}
-.knowledge-handle{width:18px!important;height:18px!important;border:0!important;background:transparent!important;opacity:.08;transition:opacity .15s ease}
-.knowledge-handle::after{content:"";position:absolute;inset:5px;border:1.5px solid #71827e;border-radius:50%;background:#f5f6f5;box-shadow:0 0 0 1px rgba(255,255,255,.92)}
+.knowledge-handle{width:6px!important;height:6px!important;border:1px solid #71827e!important;background:#f8fbfa!important;opacity:.22;transition:opacity .15s ease,border-color .15s ease}
 .knowledge-node-card:hover .knowledge-handle,.knowledge-node-card.selected .knowledge-handle{opacity:1}
-.knowledge-node-card.selected .knowledge-handle::after{border-color:#1d635b;background:#f8fbfa}
+.knowledge-node-card.selected .knowledge-handle{border-color:#1d635b!important;background:#f8fbfa!important}
 .node-branch-toggle{position:absolute;z-index:3;top:8px;right:-12px;display:grid;place-items:center;width:24px;height:24px;padding:0;border:1px solid #8d9b97;border-radius:50%;background:#fff;color:#52645f;font-size:17px;font-weight:800;line-height:1;box-shadow:0 3px 10px rgba(31,55,51,.14);cursor:pointer}
 .knowledge-node-card.selected .node-branch-toggle{border-color:#1d635b;color:#1d635b}
 
 .react-flow__edge-text{font-family:inherit}
-.react-flow__edgeupdater{fill:#f8faf9;stroke:#1d635b;stroke-width:2;cursor:grab}
+.react-flow__edgeupdater{r:3px;fill:#f8faf9;stroke:#1d635b;stroke-width:1.25;cursor:grab}
 .react-flow__edgeupdater:active{cursor:grabbing}
 .edge-midpoint{position:absolute;z-index:6;pointer-events:all}
 .edge-midpoint button{display:grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border:1px solid #a8b4b1;border-radius:999px;background:#f8faf9;color:#667873;font-size:12px;font-weight:850;box-shadow:0 3px 10px rgba(31,55,51,.08);cursor:pointer;opacity:.62}
