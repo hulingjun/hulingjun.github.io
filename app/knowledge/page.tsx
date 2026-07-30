@@ -12,7 +12,7 @@ import {
   MiniMap,
   Position,
   ReactFlow,
-  getSmoothStepPath,
+  getBezierPath,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -128,13 +128,14 @@ const KnowledgeEdge = memo(function KnowledgeEdge({
   data,
 }: EdgeProps<CanvasEdge>) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [path, labelX, labelY] = getSmoothStepPath({
+  const [path, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
+    curvature: 0.32,
   });
 
   useEffect(() => {
