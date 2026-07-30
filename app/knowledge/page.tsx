@@ -5,6 +5,7 @@ import {
   Background,
   BackgroundVariant,
   BaseEdge,
+  ConnectionMode,
   Controls,
   EdgeLabelRenderer,
   Handle,
@@ -79,6 +80,8 @@ const KnowledgeNodeCard = memo(function KnowledgeNodeCard({
   return (
     <div className={`knowledge-node-card ${selected ? "selected" : ""}`}>
       <Handle type="target" position={Position.Left} className="knowledge-handle" />
+      <Handle id="top" type="source" position={Position.Top} className="knowledge-handle" />
+      <Handle id="bottom" type="source" position={Position.Bottom} className="knowledge-handle" />
       {data.editing ? (
         <textarea
           ref={editorRef}
@@ -351,6 +354,8 @@ export default function KnowledgeEditor() {
         id: relation.id,
         source: relation.sourceId,
         target: relation.targetId,
+        sourceHandle: relation.sourceHandle,
+        targetHandle: relation.targetHandle,
         type: "knowledge",
         hidden: hiddenNodeIds.has(relation.sourceId) || hiddenNodeIds.has(relation.targetId),
         selected: selection?.kind === "relation" && selection.id === relation.id,
@@ -548,6 +553,8 @@ export default function KnowledgeEditor() {
       id: crypto.randomUUID(),
       sourceId: connection.source,
       targetId: connection.target,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
       label: "",
     };
     setGraph((current) => ({ ...current, relations: [...current.relations, relation] }));
@@ -657,6 +664,7 @@ export default function KnowledgeEditor() {
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            connectionMode={ConnectionMode.Loose}
             onInit={(instance) => {
               flowRef.current = instance;
             }}
