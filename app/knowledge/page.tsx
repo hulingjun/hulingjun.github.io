@@ -37,6 +37,7 @@ const SPACE_INDEX_KEY = "knowledge-structure-editor-spaces-v1";
 const SPACE_STORAGE_PREFIX = "knowledge-structure-editor-space-v1:";
 const COLLAPSED_KEY = "knowledge-structure-editor-collapsed-v1";
 const INSPECTOR_KEY = "knowledge-structure-editor-inspector-collapsed-v1";
+const HEADER_KEY = "knowledge-structure-editor-header-collapsed-v1";
 const NODE_WIDTH = 190;
 const NODE_HEIGHT = 100;
 const NODE_GAP_X = 76;
@@ -288,6 +289,10 @@ function readInspectorCollapsed() {
   return localStorage.getItem(INSPECTOR_KEY) === "true";
 }
 
+function readHeaderCollapsed() {
+  return localStorage.getItem(HEADER_KEY) === "true";
+}
+
 function overlaps(point: Point, nodes: KnowledgeNode[]) {
   const padding = 18;
   return nodes.some(
@@ -312,6 +317,7 @@ export default function KnowledgeEditor() {
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState("");
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasShellRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance | null>(null);
@@ -332,6 +338,7 @@ export default function KnowledgeEditor() {
     lastNodeIdRef.current = stored.graph.nodes.at(-1)?.id ?? null;
     setCollapsedNodeIds(readCollapsedNodes());
     setInspectorCollapsed(readInspectorCollapsed());
+    setHeaderCollapsed(readHeaderCollapsed());
     setReady(true);
   }, []);
 
@@ -364,6 +371,10 @@ export default function KnowledgeEditor() {
   useEffect(() => {
     if (ready) localStorage.setItem(INSPECTOR_KEY, String(inspectorCollapsed));
   }, [inspectorCollapsed, ready]);
+
+  useEffect(() => {
+    if (ready) localStorage.setItem(HEADER_KEY, String(headerCollapsed));
+  }, [headerCollapsed, ready]);
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
@@ -842,65 +853,86 @@ export default function KnowledgeEditor() {
   };
 
   return (
-    <main className="knowledge-editor-page">
-      <header className="knowledge-editor-header">
-        <div className="knowledge-navigation">
-          <a href="/" className="knowledge-back">← 返回学习站</a>
-          <div className="knowledge-space-switcher">
-            <select
-              aria-label="切换知识空间"
-              value={activeSpaceId}
-              disabled={!ready}
-              onChange={(event) => activateSpace(event.target.value)}
-            >
-              {spaces.map((space) => (
-                <option key={space.id} value={space.id}>{space.title}</option>
-              ))}
-            </select>
-            <button type="button" onClick={createSpace} disabled={!ready}>＋ 新建空间</button>
+    <main className={`knowledge-editor-page ${headerCollapsed ? "topbar-collapsed" : ""}`}>
+      <header className={`knowledge-editor-header ${headerCollapsed ? "collapsed" : ""}`}>
+        <div className="knowledge-header-primary">
+          <div className="knowledge-navigation">
+            <a href="/" className="knowledge-back">← 返回学习站</a>
+            <div className="knowledge-space-switcher">
+              <select
+                aria-label="切换知识空间"
+                value={activeSpaceId}
+                disabled={!ready}
+                onChange={(event) => activateSpace(event.target.value)}
+              >
+                {spaces.map((space) => (
+                  <option key={space.id} value={space.id}>{space.title}</option>
+                ))}
+              </select>
+              <button type="button" onClick={createSpace} disabled={!ready}>＋ 新建空间</button>
+            </div>
           </div>
-        </div>
-        <div className="knowledge-title">
-          <span>KNOWLEDGE STRUCTURE EDITOR</span>
-          <input
-            aria-label="知识结构标题"
-            value={graph.title}
-            onChange={(event) => commitGraph((current) => ({ ...current, title: event.target.value }))}
-          />
-        </div>
-        <div className="knowledge-header-actions">
-          <button onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
-          <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={importGraph} hidden />
+          <div className="knowledge-title">
+            <span>KNOWLEDGE STRUCTURE EDITOR</span>
+            <input
+              aria-label="知识结构标题"
+              value={graph.title}
+              onChange={(event) => commitGraph((current) => ({ ...current, title: event.target.value }))}
+            />
+          </div>
           <button
-            onClick={() =>
-              downloadText(
-                `${graph.title || "知识结构"}.json`,
-                JSON.stringify(graph, null, 2),
-                "application/json;charset=utf-8",
-              )
-            }
+            type="button"
+            className="topbar-toggle"
+            aria-label={headerCollapsed ? "展开上边栏" : "折叠上边栏"}
+            title={headerCollapsed ? "展开上边栏" : "折叠上边栏"}
+            onClick={() => setHeaderCollapsed((current) => !current)}
           >
-            备份
-          </button>
-          <button className="export-button" onClick={() => downloadText(`${graph.title || "知识结构"}.puml`, plantUml)}>
-            导出 PlantUML
+            {headerCollapsed ? "⌄" : "⌃"}
           </button>
         </div>
+
+        {!headerCollapsed ? (
+          <div className="knowledge-header-secondary">
+            <div className="header-action-group">
+              <span>画布</span>
+              <button className="primary" onClick={addNode}>＋ 添加节点</button>
+              <button onClick={autoLayout}>一键排版</button>
+              <button onClick={undo}>撤销</button>
+              <button onClick={redo}>重做</button>
+              <button
+                className="danger"
+                disabled={!selection || selection.kind === "canvas"}
+                onClick={removeSelection}
+              >
+                删除所选
+              </button>
+            </div>
+            <p className="header-operation-hint">拖动节点连接点创建关系 · 选中线条后拖动端点改接 · 点击线条中点添加关系文字</p>
+            <div className="header-action-group file-actions">
+              <span>文件</span>
+              <button onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
+              <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={importGraph} hidden />
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${graph.title || "知识结构"}.json`,
+                    JSON.stringify(graph, null, 2),
+                    "application/json;charset=utf-8",
+                  )
+                }
+              >
+                备份 JSON
+              </button>
+              <button className="export-button" onClick={() => downloadText(`${graph.title || "知识结构"}.puml`, plantUml)}>
+                导出 PlantUML
+              </button>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <section className={`knowledge-workspace ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
         <div className="knowledge-canvas-shell" ref={canvasShellRef}>
-          <div className="knowledge-toolbar" aria-label="画布工具">
-            <button className="primary" onClick={addNode}>＋ 添加节点</button>
-            <span>拖动连线端点可改接 · Ctrl/Cmd+Z 撤销 · 点击线条中点写关系</span>
-            {selection?.kind === "canvas" ? <button onClick={autoLayout}>一键排版</button> : null}
-            <button
-              disabled={!selection || selection.kind === "canvas"}
-              onClick={removeSelection}
-            >
-              删除所选
-            </button>
-          </div>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -970,84 +1002,92 @@ export default function KnowledgeEditor() {
             {inspectorCollapsed ? "‹" : "›"}
           </button>
           {!inspectorCollapsed ? <div className="knowledge-inspector-content">
-          <div className="inspector-heading">
-            <span>{selectedNode ? "NODE" : selectedRelation ? "RELATION" : selection?.kind === "canvas" ? "CANVAS" : "PLANTUML"}</span>
-            <h2>
-              {selectedNode
-                ? "编辑节点"
-                : selectedRelation
-                  ? "编辑关系"
-                  : selection?.kind === "canvas"
-                    ? "整理画布"
-                    : "可移植的知识结构"}
-            </h2>
-          </div>
-
-          {selectedNode ? (
-            <div className="inspector-form">
-              <label>
-                节点文字
-                <textarea
-                  value={selectedNode.text}
-                  onChange={(event) => updateNodeText(selectedNode.id, event.target.value)}
-                />
-              </label>
-              <p>双击节点可直接编辑；Ctrl/Cmd+C、V 可复制到附近空位。</p>
+            <div className="inspector-heading">
+              <span>CONTEXT PANEL</span>
+              <h2>
+                {selectedNode
+                  ? "节点属性"
+                  : selectedRelation
+                    ? "关系属性"
+                    : selection?.kind === "canvas"
+                      ? "画布信息"
+                      : "知识结构"}
+              </h2>
             </div>
-          ) : selectedRelation ? (
-            <div className="inspector-form">
-              <label>
-                关系文字
-                <input
-                  value={selectedRelation.label}
-                  onChange={(event) => updateRelationText(selectedRelation.id, event.target.value)}
-                  placeholder="可留空，例如：影响、支持、包含"
-                />
-              </label>
-              <div className="relation-summary">
-                <b>{graph.nodes.find((node) => node.id === selectedRelation.sourceId)?.text}</b>
-                <span>→</span>
-                <b>{graph.nodes.find((node) => node.id === selectedRelation.targetId)?.text}</b>
+
+            <section className="inspector-section">
+              <div className="inspector-section-label">当前选择</div>
+              {selectedNode ? (
+                <div className="inspector-form">
+                  <label>
+                    节点文字
+                    <textarea
+                      value={selectedNode.text}
+                      onChange={(event) => updateNodeText(selectedNode.id, event.target.value)}
+                    />
+                  </label>
+                  <p>双击节点可直接编辑；Ctrl/Cmd+C、V 可复制到附近空位。</p>
+                </div>
+              ) : selectedRelation ? (
+                <div className="inspector-form">
+                  <label>
+                    关系文字
+                    <input
+                      value={selectedRelation.label}
+                      onChange={(event) => updateRelationText(selectedRelation.id, event.target.value)}
+                      placeholder="可留空，例如：影响、支持、包含"
+                    />
+                  </label>
+                  <div className="relation-summary">
+                    <b>{graph.nodes.find((node) => node.id === selectedRelation.sourceId)?.text}</b>
+                    <span>→</span>
+                    <b>{graph.nodes.find((node) => node.id === selectedRelation.targetId)?.text}</b>
+                  </div>
+                </div>
+              ) : selection?.kind === "canvas" ? (
+                <p className="inspector-intro">
+                  已选中画布。添加节点、排版、撤销和删除等画布操作已集中到上边栏“画布”分组。
+                </p>
+              ) : (
+                <p className="inspector-intro">
+                  选择节点或关系后，在这里编辑它的属性。右边栏只处理当前对象和输出预览。
+                </p>
+              )}
+            </section>
+
+            <section className="inspector-section">
+              <div className="inspector-section-label">输出 · PlantUML</div>
+              <div className="plantuml-preview">
+                <div>
+                  <span>PlantUML v1.2026.6</span>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(plantUml);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1400);
+                    }}
+                  >
+                    {copied ? "已复制" : "复制源码"}
+                  </button>
+                </div>
+                <pre>{plantUml}</pre>
               </div>
-            </div>
-          ) : selection?.kind === "canvas" ? (
-            <div className="canvas-actions">
-              <p>已选中画布。点击一次即可把节点按关系从左到右自动对齐。</p>
-              <button onClick={autoLayout}>一键对齐排版</button>
-            </div>
-          ) : (
-            <p className="inspector-intro">
-              画布状态会转成独立的 Knowledge Graph，再由序列化器输出 PlantUML。节点位置只服务编辑体验，不污染知识语义。
-            </p>
-          )}
+            </section>
 
-          <div className="plantuml-preview">
-            <div>
-              <span>PlantUML v1.2026.6</span>
+            <section className="inspector-section inspector-recovery">
+              <div className="inspector-section-label">示例与恢复</div>
               <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(plantUml);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1400);
+                className="reset-demo"
+                onClick={() => {
+                  if (!window.confirm("恢复《关键对话》示例？当前画布会被替换。建议先备份 JSON。")) return;
+                  commitGraph(() => cloneStarterGraph());
+                  setCollapsedNodeIds(new Set);
+                  setSelection({ kind: "canvas" });
                 }}
               >
-                {copied ? "已复制" : "复制源码"}
+                恢复《关键对话》示例
               </button>
-            </div>
-            <pre>{plantUml}</pre>
-          </div>
-
-          <button
-            className="reset-demo"
-            onClick={() => {
-              if (!window.confirm("恢复《关键对话》示例？当前画布会被替换。建议先备份 JSON。")) return;
-              commitGraph(() => cloneStarterGraph());
-              setCollapsedNodeIds(new Set);
-              setSelection({ kind: "canvas" });
-            }}
-          >
-            恢复《关键对话》示例
-          </button>
+            </section>
           </div> : null}
         </aside>
       </section>
