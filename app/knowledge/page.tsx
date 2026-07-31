@@ -33,6 +33,8 @@ import {
 import "./knowledge.css";
 
 const STORAGE_KEY = "knowledge-structure-editor-v1";
+const SPACE_INDEX_KEY = "knowledge-structure-editor-spaces-v1";
+const SPACE_STORAGE_PREFIX = "knowledge-structure-editor-space-v1:";
 const COLLAPSED_KEY = "knowledge-structure-editor-collapsed-v1";
 const INSPECTOR_KEY = "knowledge-structure-editor-inspector-collapsed-v1";
 const NODE_WIDTH = 190;
@@ -61,6 +63,12 @@ type CanvasEdgeData = {
 type CanvasEdge = Edge<CanvasEdgeData, "knowledge">;
 type Selection = { kind: "node" | "relation"; id: string } | { kind: "canvas" } | null;
 type Point = { x: number; y: number };
+type KnowledgeSpace = { id: string; title: string };
+type KnowledgeSpaceState = {
+  spaces: KnowledgeSpace[];
+  activeSpaceId: string;
+  graph: KnowledgeGraph;
+};
 
 const KnowledgeNodeCard = memo(function KnowledgeNodeCard({
   data,
@@ -210,6 +218,63 @@ function readStoredGraph() {
   }
 }
 
+function createEmptyGraph(title: string): KnowledgeGraph {
+  return { version: 1, title, nodes: [], relations: [] };
+}
+
+function spaceStorageKey(id: string) {
+  return `${SPACE_STORAGE_PREFIX}${id}`;
+}
+
+function readStoredSpaces(): KnowledgeSpaceState {
+  const legacyGraph = readStoredGraph();
+  try {
+    const stored = JSON.parse(localStorage.getItem(SPACE_INDEX_KEY) ?? "null");
+    const validSpaces =
+      stored?.version === 1 &&
+      Array.isArray(stored.spaces) &&
+      stored.spaces.length > 0 &&
+      stored.spaces.every(
+        (space: unknown) =>
+          space &&
+          typeof space === "object" &&
+          typeof (space as KnowledgeSpace).id === "string" &&
+          typeof (space as KnowledgeSpace).title === "string",
+      );
+    if (validSpaces) {
+      const spaces = stored.spaces as KnowledgeSpace[];
+      const activeSpaceId = spaces.some((space) => space.id === stored.activeSpaceId)
+        ? stored.activeSpaceId
+        : spaces[0].id;
+      const activeSpace = spaces.find((space) => space.id === activeSpaceId)!;
+      const savedGraph = JSON.parse(localStorage.getItem(spaceStorageKey(activeSpaceId)) ?? "null");
+      return {
+        spaces,
+        activeSpaceId,
+        graph: isKnowledgeGraph(savedGraph) ? savedGraph : createEmptyGraph(activeSpace.title),
+      };
+    }
+  } catch {
+    // Fall through to migration from the original single-space storage.
+  }
+
+  const activeSpaceId = crypto.randomUUID();
+  return {
+    spaces: [{ id: activeSpaceId, title: legacyGraph.title || "默认知识空间" }],
+    activeSpaceId,
+    graph: legacyGraph,
+  };
+}
+
+function readSpaceGraph(id: string, title: string) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(spaceStorageKey(id)) ?? "null");
+    return isKnowledgeGraph(saved) ? saved : createEmptyGraph(title);
+  } catch {
+    return createEmptyGraph(title);
+  }
+}
+
 function readCollapsedNodes() {
   try {
     const stored = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
@@ -236,6 +301,8 @@ function overlaps(point: Point, nodes: KnowledgeNode[]) {
 
 export default function KnowledgeEditor() {
   const [graph, setGraph] = useState<KnowledgeGraph>(cloneStarterGraph);
+  const [spaces, setSpaces] = useState<KnowledgeSpace[]>([]);
+  const [activeSpaceId, setActiveSpaceId] = useState("");
   const [ready, setReady] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -250,15 +317,19 @@ export default function KnowledgeEditor() {
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const copiedNodeRef = useRef<KnowledgeNode | null>(null);
   const lastNodeIdRef = useRef<string | null>(null);
+  const activeSpaceIdRef = useRef("");
   const graphRef = useRef<KnowledgeGraph>(graph);
   const undoStackRef = useRef<KnowledgeGraph[]>([]);
   const redoStackRef = useRef<KnowledgeGraph[]>([]);
   const dragStartGraphRef = useRef<KnowledgeGraph | null>(null);
 
   useEffect(() => {
-    const storedGraph = readStoredGraph();
-    setGraph(storedGraph);
-    lastNodeIdRef.current = storedGraph.nodes.at(-1)?.id ?? null;
+    const stored = readStoredSpaces();
+    activeSpaceIdRef.current = stored.activeSpaceId;
+    setSpaces(stored.spaces);
+    setActiveSpaceId(stored.activeSpaceId);
+    setGraph(stored.graph);
+    lastNodeIdRef.current = stored.graph.nodes.at(-1)?.id ?? null;
     setCollapsedNodeIds(readCollapsedNodes());
     setInspectorCollapsed(readInspectorCollapsed());
     setReady(true);
@@ -266,8 +337,25 @@ export default function KnowledgeEditor() {
 
   useEffect(() => {
     graphRef.current = graph;
-    if (ready) localStorage.setItem(STORAGE_KEY, JSON.stringify(graph));
+    if (!ready || !activeSpaceIdRef.current) return;
+    localStorage.setItem(spaceStorageKey(activeSpaceIdRef.current), JSON.stringify(graph));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(graph));
+    setSpaces((current) => {
+      const active = current.find((space) => space.id === activeSpaceIdRef.current);
+      if (!active || active.title === graph.title) return current;
+      return current.map((space) =>
+        space.id === activeSpaceIdRef.current ? { ...space, title: graph.title || "未命名空间" } : space,
+      );
+    });
   }, [graph, ready]);
+
+  useEffect(() => {
+    if (!ready || !activeSpaceId) return;
+    localStorage.setItem(
+      SPACE_INDEX_KEY,
+      JSON.stringify({ version: 1, activeSpaceId, spaces }),
+    );
+  }, [activeSpaceId, ready, spaces]);
 
   useEffect(() => {
     if (ready) localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedNodeIds]));
@@ -327,6 +415,49 @@ export default function KnowledgeEditor() {
     setEditingRelationId(null);
     showNotice("已重做操作");
   }, [showNotice]);
+
+  const activateSpace = useCallback((id: string) => {
+    if (!id || id === activeSpaceIdRef.current) return;
+    const target = spaces.find((space) => space.id === id);
+    if (!target) return;
+    const nextGraph = readSpaceGraph(id, target.title);
+    activeSpaceIdRef.current = id;
+    graphRef.current = nextGraph;
+    setActiveSpaceId(id);
+    setGraph(nextGraph);
+    setSelection({ kind: "canvas" });
+    setEditingNodeId(null);
+    setEditingRelationId(null);
+    setCollapsedNodeIds(new Set);
+    setNodeMeasurements({});
+    lastNodeIdRef.current = nextGraph.nodes.at(-1)?.id ?? null;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.24, duration: 320 }));
+    showNotice(`已切换到「${target.title}」`);
+  }, [showNotice, spaces]);
+
+  const createSpace = useCallback(() => {
+    const id = crypto.randomUUID();
+    const title = `知识空间 ${spaces.length + 1}`;
+    const nextGraph = createEmptyGraph(title);
+    localStorage.setItem(spaceStorageKey(id), JSON.stringify(nextGraph));
+    activeSpaceIdRef.current = id;
+    graphRef.current = nextGraph;
+    setSpaces((current) => [...current, { id, title }]);
+    setActiveSpaceId(id);
+    setGraph(nextGraph);
+    setSelection({ kind: "canvas" });
+    setEditingNodeId(null);
+    setEditingRelationId(null);
+    setCollapsedNodeIds(new Set);
+    setNodeMeasurements({});
+    lastNodeIdRef.current = null;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.24, duration: 320 }));
+    showNotice(`已新建「${title}」`);
+  }, [showNotice, spaces.length]);
 
   const updateNodeText = useCallback((id: string, text: string) => {
     commitGraph((current) => ({
@@ -713,7 +844,22 @@ export default function KnowledgeEditor() {
   return (
     <main className="knowledge-editor-page">
       <header className="knowledge-editor-header">
-        <a href="/" className="knowledge-back">← 返回学习站</a>
+        <div className="knowledge-navigation">
+          <a href="/" className="knowledge-back">← 返回学习站</a>
+          <div className="knowledge-space-switcher">
+            <select
+              aria-label="切换知识空间"
+              value={activeSpaceId}
+              disabled={!ready}
+              onChange={(event) => activateSpace(event.target.value)}
+            >
+              {spaces.map((space) => (
+                <option key={space.id} value={space.id}>{space.title}</option>
+              ))}
+            </select>
+            <button type="button" onClick={createSpace} disabled={!ready}>＋ 新建空间</button>
+          </div>
+        </div>
         <div className="knowledge-title">
           <span>KNOWLEDGE STRUCTURE EDITOR</span>
           <input
