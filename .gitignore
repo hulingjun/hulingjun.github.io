@@ -1,0 +1,6 @@
+node_modules/
+github-dist/
+gallery-report.json
+records-report.json
+github-pages/public/art-data/images/
+github-pages/public/records/knowledge/

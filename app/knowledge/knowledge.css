@@ -124,3 +124,26 @@
   .knowledge-inspector{padding:18px;max-height:38dvh}
   .knowledge-inspector .inspector-heading h2{font-size:20px}
 }
+
+/* Growth archive shell; neutral nodes and green selection remain distinct. */
+.knowledge-editor-page{background:#090e16;color:#e6edf7}
+.knowledge-editor-header,.knowledge-header-secondary,.knowledge-inspector{background:#101a27;border-color:#2b394c;color:#e6edf7}
+.knowledge-header-secondary{background:#0d1621}
+.knowledge-canvas-shell{background:#0b131e}
+.knowledge-back,.knowledge-title input,.inspector-heading h2{color:#dce9f8}
+.knowledge-title span,.inspector-heading span{color:#81e3d5}
+.knowledge-title input:focus{background:#172536}
+.knowledge-space-switcher select,.knowledge-space-switcher button,.topbar-toggle,.header-action-group button,.inspector-toggle{background:#182536;border-color:#34465d;color:#d8e6f6}
+.header-action-group button.primary,.header-action-group button.export-button,.header-action-group button.cloud-primary{background:#285c53;color:#e7fff7;border-color:#408c7e}
+.header-action-group>span,.header-operation-hint,.inspector-section-label{color:#a0b3c9}
+.inspector-section{border-color:#2b394c}
+.inspector-intro,.canvas-actions p,.inspector-form label,.inspector-form>p{color:#afc0d3}
+.inspector-form textarea,.inspector-form input{background:#0b131e;border-color:#34465d;color:#dbe7f6}
+.knowledge-save-state{background:#142231;color:#b5c9df;font-size:12px}
+.knowledge-node-card{background:#28313d;color:#dfe6ef;border-color:#626e7d;border-top-color:#626e7d}
+.knowledge-node-card.selected{background:#183d32;color:#ddfff0;border-color:#68bc90;border-top-color:#68bc90}
+.knowledge-node-card textarea{background:#142331;color:#e2eefb;border-color:#4d7a71}
+.knowledge-node-card .knowledge-handle{background:#a7b3c3!important;border-color:#8899ad!important}
+.knowledge-node-card.selected .knowledge-handle{background:#9de5b8!important;border-color:#9de5b8!important}
+.relation-summary{background:#192b3d}
+.reset-demo{background:#241e25;color:#dcaeab;border-color:#655056}

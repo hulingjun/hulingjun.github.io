@@ -1,0 +1,25 @@
+name: "保存知识空间"
+description: "把编辑器复制的知识数据保存到 GitHub，自动进入成长档案。"
+title: "[知识] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请使用 hulingjun 登录。从知识空间点击“保存到 GitHub”，复制完整数据后粘贴到下方。
+        同一个空间的新提交会成为最新版本；旧版本留在 GitHub 历史中。只提交准备公开的内容。
+        如需私密知识存储，不要在这里提交：当前仓库与网站均为公开。
+  - type: textarea
+    id: knowledge-data
+    attributes:
+      label: 知识数据
+      description: 粘贴从编辑器复制的完整 JSON。请勿修改 spaceId。
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 公开确认
+      options:
+        - label: 我确认这份记录可以在公开网站和 GitHub 仓库中展示。
+          required: true

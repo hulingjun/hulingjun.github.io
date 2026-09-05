@@ -3,28 +3,68 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  issues:
+    types: [opened, edited, closed, reopened, deleted]
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   build-and-deploy:
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.sender.login == github.repository_owner &&
+       github.event.issue.user.login == github.repository_owner &&
+       (startsWith(github.event.issue.title, '[画作]') ||
+        startsWith(github.event.issue.title, '[知识]') ||
+        startsWith(github.event.issue.title, '[成长]') ||
+        startsWith(github.event.changes.title.from, '[画作]') ||
+        startsWith(github.event.changes.title.from, '[知识]') ||
+        startsWith(github.event.changes.title.from, '[成长]')))
+    permissions:
+      contents: write
+      issues: write
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Build static 2D and 3D site
+      - name: Install isolated image processing tools
+        run: npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4
+      - name: Validate archive security and image processing
+        run: node --test scripts/archive.test.mjs
+        env:
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+      - name: Prepare owner artwork and growth records
+        run: |
+          node scripts/build-gallery.mjs
+          node scripts/sync-records.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+      - name: Build website
         run: npm run build
+      - name: Save knowledge and journal files in GitHub
+        run: |
+          git add -- content
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Archive owner growth records"
+            git push origin HEAD:main
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -32,3 +72,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Report publication result on the submitted record
+        if: always() && github.event_name == 'issues' && github.event.action != 'deleted'
+        uses: actions/github-script@v7
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deployment.outcome }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const number = context.issue.number;
+            let body;
+            if (process.env.DEPLOY_OUTCOME !== 'success') {
+              body = '这次发布未完成，线上保留上次成功版本。请查看本次运行并重试：https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId;
+            } else {
+              const reports = ['gallery-report.json', 'records-report.json'].filter(p => fs.existsSync(p)).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+              const error = reports.flatMap(r => r.errors || []).find(e => e.id === number);
+              const published = reports.some(r => (r.publishedIds || []).includes(number));
+              body = error ? '本记录尚未发布：' + error.message + '。请编辑原记录修正后，系统会自动重试。'
+                : published ? '已保存并发布到成长档案：https://hulingjun.github.io/ 。知识数据已写入仓库 content/knowledge；画作见 /art/。'
+                : '本记录当前未在网站展示（已关闭、改名或已被同一空间的新版本取代）。GitHub 记录及历史仍保留。';
+            }
+            await github.rest.issues.createComment({...context.repo, issue_number: number, body});

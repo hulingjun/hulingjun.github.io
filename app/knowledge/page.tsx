@@ -31,12 +31,14 @@ import {
   starterGraph,
 } from "./model";
 import "./knowledge.css";
+import GitHubArchive from "./GitHubArchive";
 
 const STORAGE_KEY = "knowledge-structure-editor-v1";
 const SPACE_INDEX_KEY = "knowledge-structure-editor-spaces-v1";
 const SPACE_STORAGE_PREFIX = "knowledge-structure-editor-space-v1:";
 const COLLAPSED_KEY = "knowledge-structure-editor-collapsed-v1";
 const INSPECTOR_KEY = "knowledge-structure-editor-inspector-collapsed-v1";
+const CLOUD_ID_KEY = "knowledge-cloud-id-map-v1";
 const HEADER_KEY = "knowledge-structure-editor-header-collapsed-v1";
 const NODE_WIDTH = 190;
 const NODE_HEIGHT = 100;
@@ -309,6 +311,7 @@ export default function KnowledgeEditor() {
   const [spaces, setSpaces] = useState<KnowledgeSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState("");
   const [ready, setReady] = useState(false);
+  const [cloudIds, setCloudIds] = useState<Record<string,string>>({});
   const [selection, setSelection] = useState<Selection>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingRelationId, setEditingRelationId] = useState<string | null>(null);
@@ -331,6 +334,7 @@ export default function KnowledgeEditor() {
 
   useEffect(() => {
     const stored = readStoredSpaces();
+    try { const ids=JSON.parse(localStorage.getItem(CLOUD_ID_KEY)??"{}"); if(ids && typeof ids==="object" && !Array.isArray(ids))setCloudIds(ids); } catch {}
     activeSpaceIdRef.current = stored.activeSpaceId;
     setSpaces(stored.spaces);
     setActiveSpaceId(stored.activeSpaceId);
@@ -469,6 +473,23 @@ export default function KnowledgeEditor() {
     requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.24, duration: 320 }));
     showNotice(`已新建「${title}」`);
   }, [showNotice, spaces.length]);
+
+
+  const loadCloudSpace = useCallback((cloudId:string, nextGraph:KnowledgeGraph) => {
+    const id=crypto.randomUUID();
+    localStorage.setItem(spaceStorageKey(id),JSON.stringify(nextGraph));
+    const ids={...cloudIds,[id]:cloudId};
+    setCloudIds(ids);localStorage.setItem(CLOUD_ID_KEY,JSON.stringify(ids));
+    activeSpaceIdRef.current=id;graphRef.current=nextGraph;
+    setSpaces(current=>[...current,{id,title:nextGraph.title}]);
+    setActiveSpaceId(id);setGraph(nextGraph);
+    setSelection({kind:"canvas"});setEditingNodeId(null);setEditingRelationId(null);
+    setCollapsedNodeIds(new Set);setNodeMeasurements({});
+    undoStackRef.current=[];redoStackRef.current=[];
+    lastNodeIdRef.current=nextGraph.nodes.at(-1)?.id??null;
+    requestAnimationFrame(()=>flowRef.current?.fitView({padding:0.24,duration:320}));
+    showNotice("已载入 GitHub 版本，原草稿已保留");
+  },[cloudIds,showNotice]);
 
   const updateNodeText = useCallback((id: string, text: string) => {
     commitGraph((current) => ({
@@ -857,7 +878,7 @@ export default function KnowledgeEditor() {
       <header className={`knowledge-editor-header ${headerCollapsed ? "collapsed" : ""}`}>
         <div className="knowledge-header-primary">
           <div className="knowledge-navigation">
-            <a href="/" className="knowledge-back">← 返回学习站</a>
+            <a href="/" className="knowledge-back">← 成长记录</a>
             <div className="knowledge-space-switcher">
               <select
                 aria-label="切换知识空间"
@@ -909,7 +930,8 @@ export default function KnowledgeEditor() {
             </div>
             <p className="header-operation-hint">拖动节点连接点创建关系 · 选中线条后拖动端点改接 · 点击线条中点添加关系文字</p>
             <div className="header-action-group file-actions">
-              <span>文件</span>
+              <span>归档</span>
+              <GitHubArchive graph={graph} spaceId={cloudIds[activeSpaceId] || activeSpaceId} onLoad={loadCloudSpace} />
               <button onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
               <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={importGraph} hidden />
               <button
@@ -988,7 +1010,7 @@ export default function KnowledgeEditor() {
             />
           </ReactFlow>
           {notice ? <div className="knowledge-toast">{notice}</div> : null}
-          <div className="knowledge-save-state"><i /> 已自动保存在当前浏览器</div>
+          <div className="knowledge-save-state"><i /> 本地恢复草稿 · 点击“保存到 GitHub”发布</div>
         </div>
 
         <aside className={`knowledge-inspector ${inspectorCollapsed ? "collapsed" : ""}`}>

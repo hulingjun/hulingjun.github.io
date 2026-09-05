@@ -1,0 +1,50 @@
+name: "上传绘画作品"
+description: "手机选择照片，填写作品信息。仅 hulingjun 提交的作品会发布到画展。"
+title: "[画作] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 留下这一幅画
+        一幅作品新建一条记录。提交后通常几分钟内自动发布到 https://hulingjun.github.io/art/ 。
+
+        **图片一上传到 GitHub 就可能被公开访问，包括原始照片。** 请先裁掉姓名、学校、住址等信息，并在手机分享照片时移除位置。画展中的处理版会去掉照片元数据，但不会删除 GitHub 的原始附件。
+  - type: input
+    id: artwork-title
+    attributes:
+      label: 作品名称
+      placeholder: 例如：彩色的夏天
+    validations:
+      required: true
+  - type: input
+    id: artwork-date
+    attributes:
+      label: 创作日期
+      description: "格式 YYYY-MM-DD。不记得具体日期可以留空，不会以上传日期代替。"
+      placeholder: "2026-09-05"
+  - type: textarea
+    id: artwork-photo
+    attributes:
+      label: 作品图片
+      description: "点输入框下方的附件按钮，选择手机相册中的一张照片。支持 JPG、PNG、WebP、GIF，最大 10 MB。HEIC 请先转成 JPG；GIF 只展示首帧。不要删除上传后自动出现的图片链接。"
+      placeholder: 在这里添加一张画作照片
+    validations:
+      required: true
+  - type: textarea
+    id: artwork-story
+    attributes:
+      label: 作品故事
+      description: 可选，记录她画这幅画时说的话，最多 1200 字。请勿填写私人信息。
+      placeholder: 她说……
+  - type: checkboxes
+    id: public-consent
+    attributes:
+      label: 公开确认
+      options:
+        - label: 我确认只上传可公开展示的画作，不含孩子的姓名、学校、住址等隐私。
+          required: true
+  - type: markdown
+    attributes:
+      value: |
+        提交后请保持记录为 Open（打开）。编辑上面的信息会更新画展；Close issue（关闭记录）会下架，Reopen（重新打开）会恢复。
+        下架不会自动删除 GitHub 的原始附件。发布结果见本记录下的自动回复。
