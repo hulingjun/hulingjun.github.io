@@ -20,7 +20,7 @@ jobs:
       - name: Install isolated image processing tools
         run: npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4
       - name: Validate records, permissions and image processing
-        run: node --test scripts/archive.test.mjs
+        run: node --test scripts/archive.test.mjs scripts/seasons.test.mjs
         env:
           GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
       - name: Build empty archive fixture
