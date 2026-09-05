@@ -5,7 +5,7 @@ https://hulingjun.github.io/
 - 首页：自己的知识、成长随记，以及女儿的成长足迹。
 - /art/：原比例绘画作品，手机可跳转 GitHub 上传。
 - /knowledge/：保留现有节点编辑器，可提交 / 打开 GitHub 知识空间。
-- /learning/：保留原《关键对话》学习实验；/3d-alpha/ 不变。
+- 旧 /learning/ 与 /3d-alpha/ 地址转到新的成长首页，不再展示旧界面。
 
 ## 保存方式
 
