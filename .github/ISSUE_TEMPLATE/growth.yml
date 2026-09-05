@@ -1,0 +1,47 @@
+name: "写一条成长记录"
+description: "记录自己的思考，或女儿的一次新发现。"
+title: "[成长] "
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 记录归属
+      options:
+        - 我的成长
+        - 女儿的成长
+    validations:
+      required: true
+  - type: input
+    id: heading
+    attributes:
+      label: 记录标题
+      placeholder: 今天，理解了一件小事
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: 记录日期
+      placeholder: "2026-09-05"
+      description: "填写 YYYY-MM-DD，例如 2026-09-05。"
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: 记录正文
+      description: 写下这次经历、发现或思考。支持换行，以纯文字展示，最多 10000 字。
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 公开确认
+      options:
+        - label: 我确认这份记录可以在公开网站和 GitHub 仓库中展示。
+          required: true
+  - type: markdown
+    attributes:
+      value: |
+        仅 hulingjun 的记录会进入网站。不要填写孩子的姓名、学校、位置或其他隐私。
+        编辑本记录会更新网站，关闭记录会从网站下架。GitHub 历史仍保留。

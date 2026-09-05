@@ -11,6 +11,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        art: resolve(__dirname, "github-pages/art/index.html"),
+        learning: resolve(__dirname, "github-pages/learning/index.html"),
         home: resolve(__dirname, "github-pages/index.html"),
         alpha3d: resolve(__dirname, "github-pages/3d-alpha/index.html"),
         knowledge: resolve(__dirname, "github-pages/knowledge/index.html"),

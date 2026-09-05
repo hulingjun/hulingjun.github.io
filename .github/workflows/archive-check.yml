@@ -1,0 +1,42 @@
+name: Validate growth archive
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [agent/github-art-gallery]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Install isolated image processing tools
+        run: npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4
+      - name: Validate records, permissions and image processing
+        run: node --test scripts/archive.test.mjs
+        env:
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+      - name: Build empty archive fixture
+        run: |
+          node scripts/build-gallery.mjs
+          node scripts/sync-records.mjs
+          npm run build
+        env:
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+          GALLERY_FIXTURE: scripts/fixtures/empty.json
+      - name: Check published routes and public data
+        run: |
+          test -s github-dist/index.html
+          test -s github-dist/art/index.html
+          test -s github-dist/learning/index.html
+          test -s github-dist/knowledge/index.html
+          test -s github-dist/3d-alpha/index.html
+          test -s github-dist/art-data/manifest.json
+          test -s github-dist/records/index.json
