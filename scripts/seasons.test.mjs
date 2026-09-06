@@ -103,13 +103,6 @@ test("performance caches retain full detail with conservative per-tree bounds",(
  }
  updateGarden(world,sampleSeason(22),12);
  const versions=()=>world.trees.map(t=>t.leaves.instanceMatrix.version).concat(world.particles.geometry.attributes.position.version,world.rain.geometry.attributes.position.version,world.falling.instanceMatrix.version);
- for(const tree of world.trees){
-  assert.equal(tree.leafPrepass.geometry,tree.leaves.geometry);
-  assert.equal(tree.leafPrepass.instanceMatrix,tree.leaves.instanceMatrix);
-  assert.equal(tree.leafPrepass.boundingSphere,tree.leaves.boundingSphere);
-  assert.equal(tree.leafPrepass.material.alphaTest,tree.leaves.material.alphaTest);
-  assert.equal(tree.leafPrepass.castShadow,false);assert.equal(tree.leafPrepass.material.colorWrite,false);
- }
  const before=versions();
  for(let i=0;i<100;i++)assert.equal(updateGarden(world,sampleSeason(22),12),false);
  assert.deepEqual(versions(),before,"Camera-only updates make no buffer uploads");

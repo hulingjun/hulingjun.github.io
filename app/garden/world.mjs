@@ -236,13 +236,6 @@ export function buildGarden(low=false,assets={}){
   // tests these bounds against its own light frustum, not the viewer's.
   leaves.computeBoundingSphere();leaves.boundingSphere.radius+=.12;leaves.frustumCulled=true;
   petioles.computeBoundingSphere();petioles.frustumCulled=true;
-  // Populate the nearest opaque leaf depth before expensive PBR lighting.
-  // Both passes use the identical geometry, transform buffer, alpha test and wind.
-  const depthOnly=new T.MeshDepthMaterial({map:assets.leaf||null,alphaTest:.42,side:T.DoubleSide,colorWrite:false,depthWrite:true});
-  windShader(depthOnly,wind);
-  const leafPrepass=new T.InstancedMesh(leafGeo,depthOnly,seeds.length);
-  leafPrepass.instanceMatrix=leaves.instanceMatrix;leafPrepass.boundingSphere=leaves.boundingSphere;
-  leafPrepass.renderOrder=1;leaves.renderOrder=2;leafPrepass.userData.depthPrepass=true;group.add(leafPrepass);
   const snow=new T.Mesh(bark.geometry,new T.MeshStandardMaterial({color:"#e7edf0",roughness:1,transparent:true,opacity:0,polygonOffset:true,polygonOffsetFactor:-1}));
   snow.material.onBeforeCompile=shader=>{
    shader.vertexShader="varying float gardenUp;\n"+shader.vertexShader;
@@ -252,7 +245,7 @@ export function buildGarden(low=false,assets={}){
   };
   snow.material.depthWrite=false;
   snow.scale.setScalar(1.018);group.add(snow);
-  trees.push({group,bark,leaves,petioles,seeds,shoots,snow,baseMatrices,leafPrepass});
+  trees.push({group,bark,leaves,petioles,seeds,shoots,snow,baseMatrices});
  }
  // Grass blades form the clearing, not a floating pedestal.
  const grassGeo=new T.PlaneGeometry(.045,.4,1,4);grassGeo.translate(0,.2,0);
@@ -310,7 +303,7 @@ export function updateGarden(w,state,time){
   const c1=blend("leaf"),c2=blend("tip");
   for(const tree of w.trees){
    tree.snow.material.opacity=winter*.9;tree.snow.visible=winter>.01;tree.petioles.visible=winter<.99;
-   tree.leaves.visible=winter<1;tree.leafPrepass.visible=tree.leaves.visible;
+   tree.leaves.visible=winter<1;
    const matrices=tree.leaves.instanceMatrix.array,colors=tree.leaves.instanceColor.array,base=tree.baseMatrices;
    for(let i=0;i<tree.seeds.length;i++){
     const s=tree.seeds[i],growth=Math.max(0,1-winter-autumn*s.drop*.58)*(.82+summer*.18),m=i*16,c=i*3;

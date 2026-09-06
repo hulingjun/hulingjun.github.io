@@ -43,7 +43,7 @@ try{
  }
  assert.deepEqual(results.after.inventory,results.before.inventory,"All allocated geometry, instances and quality settings are unchanged");
  assert.ok(results.after.cpu.paused.p50<results.before.cpu.paused.p50*.5,"Paused camera redraw skips simulation");
- for(let i=0;i<results.before.frames.length;i++)assert.ok(results.after.frames[i].draw.calls<=results.before.frames[i].draw.calls+2,"Only one shared-buffer leaf depth pass per tree");
+ for(let i=0;i<results.before.frames.length;i++)assert.ok(results.after.frames[i].draw.calls<=results.before.frames[i].draw.calls,"Never increase draw submissions");
  assert.ok(comparisons.find(x=>x.label==="winter-detail").trianglesAfter<comparisons.find(x=>x.label==="winter-detail").trianglesBefore,"Zero-area winter leaves are not submitted");
  assert.deepEqual(errors,[]);
  await writeFile(join(output,"report.json"),JSON.stringify({passed:true,baselineCommit,results,comparisons,errors},null,2));

@@ -46,7 +46,7 @@ window.cpuMeasure=()=>{
 };
 window.inventory=()=>{
  const geometries=[];
- world.scene.traverse(o=>{if(o.isMesh&&!o.userData.depthPrepass){const vertices=o.geometry.attributes.position.count,triangles=o.geometry.index?o.geometry.index.count/3:vertices/3;geometries.push({vertices,triangles,count:o.isInstancedMesh?o.count:1});}});
+ world.scene.traverse(o=>{if(o.isMesh){const vertices=o.geometry.attributes.position.count,triangles=o.geometry.index?o.geometry.index.count/3:vertices/3;geometries.push({vertices,triangles,count:o.isInstancedMesh?o.count:1});}});
  return {leaves:world.trees.reduce((sum,t)=>sum+t.leaves.count,0),petioles:world.trees.reduce((sum,t)=>sum+t.petioles.count,0),grass:world.grass.count,
   allocatedTriangles:geometries.reduce((sum,g)=>sum+g.triangles*g.count,0),shadowSize:world.light.shadow.mapSize.toArray(),pixelRatio:renderer.getPixelRatio()};
 };
