@@ -27,20 +27,16 @@ try{
  await page.locator('.season-garden[data-status="ready"]').waitFor({timeout:90000});
  const scene=page.locator(".garden-canvas");
  assert.equal(await page.getByRole("button",{name:"播放天气",exact:true}).count(),1);
- for(const style of ["写实","动漫","水墨"]){
-  await page.getByRole("group",{name:"选择画风"}).getByRole("button",{name:style}).click();
-  for(const [i,season] of ["春","夏","秋","冬"].entries()){
-   await page.getByRole("group",{name:"选择季节"}).getByRole("button",{name:season,exact:true}).click();
-   await page.waitForFunction(s=>document.querySelector(".garden-canvas")?.dataset.season===s,season);
-   await page.waitForTimeout(300);
-   assert.equal(await scene.getAttribute("data-season-mix"),"0.0000");
-   assert.equal(await page.locator(".garden-season strong").textContent(),season);
-   await page.screenshot({path:join(output,style+"-"+i+".png")});
-   results.push(style+" / "+season+" label and scene agree");
-  }
+ assert.equal(await page.getByRole("group",{name:"选择画风"}).count(),0,"Only the realistic scene remains");
+ for(const [i,season] of ["春","夏","秋","冬"].entries()){
+  await page.getByRole("group",{name:"选择季节"}).getByRole("button",{name:season,exact:true}).click();
+  await page.waitForFunction(s=>document.querySelector(".garden-canvas")?.dataset.season===s,season);
+  assert.equal(await scene.getAttribute("data-season-mix"),"0.0000");
+  assert.equal(await page.locator(".garden-season strong").textContent(),season);
+  await page.screenshot({path:join(output,"real-"+i+".png")});
+  results.push("Realistic / "+season+" label and scene agree");
  }
- await page.getByRole("group",{name:"选择画风"}).getByRole("button",{name:"写实"}).click();
- await page.getByRole("group",{name:"选择季节"}).getByRole("button",{name:"秋",exact:true}).click();
+ await page.getByRole("group",{name:"选择季节"}).getByRole("button",{name:"夏",exact:true}).click();
  const box=await scene.boundingBox(),x=box.x+box.width*.54,y=box.y+box.height*.48;
  const camera=()=>scene.getAttribute("data-camera");
  const before=await camera(),weather=await scene.getAttribute("data-weather-time");
@@ -55,7 +51,7 @@ try{
  await writeFile(join(output,"desktop-camera.json"),JSON.stringify({before,rotated,zoomed,restored,weather},null,2));
  assert.equal(restored,before,"Reset returns to exact home view");
  for(const value of restored.split(","))assert.ok(Number.isFinite(Number(value)));
- // The same home composition was captured in all 12 seasonal screenshots above.
+ // The same home composition was captured in all four seasonal screenshots above.
  // Keep camera verification independent of Chromium's extra WebGL readback.
 
  results.push("Desktop: drag rotate, wheel zoom, right pan, exact reset, paused interaction");
@@ -66,11 +62,7 @@ try{
  const mp=await mobile.newPage();mp.on("pageerror",e=>errors.push(e.message));
  await mp.goto("http://127.0.0.1:4173/",{waitUntil:"networkidle"});
  await mp.locator('.season-garden[data-status="ready"]').waitFor({timeout:90000});
- const headingBox=await mp.locator(".garden-heading").boundingBox(),styleBox=await mp.locator(".garden-style-switch").boundingBox();
- assert.ok(headingBox.y+headingBox.height<styleBox.y,"Mobile title must not overlap the style controls");
- for(const label of await mp.locator(".garden-style-switch button > span").all()){
-  const bounds=await label.boundingBox();assert.ok(bounds.height<25&&bounds.width>30,"Style labels stay on one line");
- }
+ assert.equal(await mp.getByRole("group",{name:"选择画风"}).count(),0);
  const ms=mp.locator(".garden-canvas"),mb=await ms.boundingBox(),client=await mobile.newCDPSession(mp);
  const mx=mb.x+195,my=mb.y+350;
  const mbefore=await ms.getAttribute("data-camera");
@@ -84,12 +76,23 @@ try{
  await client.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});await mp.waitForTimeout(800);
  assert.notEqual(await ms.getAttribute("data-camera"),mrotated,"Mobile pinch zoom");
  await mp.getByRole("button",{name:"恢复视角",exact:true}).click();await mp.waitForTimeout(800);
- for(const style of ["写实","动漫","水墨"]){
-  await mp.getByRole("group",{name:"选择画风"}).getByRole("button",{name:style}).click();
-  await mp.waitForTimeout(400);await mp.screenshot({path:join(output,"mobile-"+style+".png")});
- }
+ await mp.screenshot({path:join(output,"mobile-real.png")});
  assert.equal(await mp.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,"No horizontal overflow");
- results.push("Mobile: touch rotation, pinch zoom, all styles, no horizontal overflow");
+ results.push("Mobile: touch rotation, pinch zoom, realistic scene, no horizontal overflow");
+ await mobile.close();
+ const detailContext=await browser.newContext({viewport:{width:1440,height:1080},deviceScaleFactor:1,reducedMotion:"reduce"});
+ const detail=await detailContext.newPage();detail.on("pageerror",e=>errors.push(e.message));
+ await detail.goto("http://127.0.0.1:4173/",{waitUntil:"networkidle"});
+ await detail.locator('.season-garden[data-status="ready"]').waitFor({timeout:90000});
+ await detail.getByRole("group",{name:"选择季节"}).getByRole("button",{name:"夏",exact:true}).click();
+ const db=await detail.locator(".garden-canvas").boundingBox();
+ await detail.mouse.move(db.x+db.width*.48,db.y+db.height*.47);
+ await detail.mouse.wheel(0,-1200);await detail.waitForTimeout(1200);
+ await detail.screenshot({path:join(output,"detail-foliage-bark.png"),timeout:60000});
+ await detail.getByRole("group",{name:"选择季节"}).getByRole("button",{name:"冬",exact:true}).click();
+ await detail.waitForFunction(()=>document.querySelector(".garden-canvas").dataset.season==="冬");
+ await detail.screenshot({path:join(output,"detail-winter-branches.png"),timeout:60000});
+ await detailContext.close();results.push("Summer close-up attachments and winter bark detail captured");
  assert.deepEqual(errors,[],"No runtime or WebGL shader errors");
  await writeFile(join(output,"report.json"),JSON.stringify({passed:true,results,errors},null,2));
  console.log(JSON.stringify({passed:true,results},null,2));
