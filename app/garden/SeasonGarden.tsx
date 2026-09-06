@@ -45,9 +45,10 @@ export default function SeasonGarden(){
    orbit.listenToKeyEvents(canvas);
    presentation=createPresentation(renderer,world.scene,camera);
    const home=()=>{
+    const damping=orbit.enableDamping;orbit.enableDamping=false;orbit.update();
     const distance=Math.max(16,10/(2*Math.tan(Math.PI/9)*camera.aspect));
     orbit.target.set(0,2.4,0);camera.position.set(distance*.2,2.4+distance*.22,distance);
-    orbit.update();orbit.saveState();dirty=true;
+    orbit.update();orbit.saveState();orbit.enableDamping=damping;dirty=true;
    };
    const resize=()=>{
     const w=element.clientWidth,h=element.clientHeight;if(!w||!h)return;
@@ -55,7 +56,7 @@ export default function SeasonGarden(){
     dirty=true;start();
    };
    function start(){if(!frame&&!disposed&&!lostContext&&visible&&inView)frame=requestAnimationFrame(render);}
-   function wake(){dirty=true;last=0;if(!inFrame)start();}
+   function wake(){dirty=true;if(!inFrame)start();}
    function render(now:number){
     frame=0;if(disposed||lostContext||!visible||!inView)return;inFrame=true;
     const c=control.current,dt=last?Math.min((now-last)/1000,.05):0;last=now;
@@ -86,9 +87,9 @@ export default function SeasonGarden(){
    const sizeObserver=new ResizeObserver(resize);sizeObserver.observe(element);listeners.push(()=>sizeObserver.disconnect());
    const intersection=new IntersectionObserver(entries=>{
     inView=entries[0].isIntersecting;
-    if(inView)wake();else{cancelAnimationFrame(frame);frame=0;}
+    if(inView){last=0;wake();}else{cancelAnimationFrame(frame);frame=0;}
    },{threshold:.01});intersection.observe(element);listeners.push(()=>intersection.disconnect());
-   const visibility=()=>{visible=!document.hidden;if(visible)wake();else{cancelAnimationFrame(frame);frame=0;}};
+   const visibility=()=>{visible=!document.hidden;if(visible){last=0;wake();}else{cancelAnimationFrame(frame);frame=0;}};
    const motion=()=>{if(reduce.matches){control.current.paused=true;setPaused(true);wake();}};
    const lost=(event:Event)=>{event.preventDefault();lostContext=true;cancelAnimationFrame(frame);frame=0;setStatus("fallback");};
    const focus=()=>canvas.focus({preventScroll:true});
