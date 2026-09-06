@@ -2,12 +2,11 @@ import {useEffect,useRef,useState} from "react";
 import {NEW_NOTE} from "../shared/archive";
 import {SEASONS,SEASON_DURATION_SECONDS,sampleSeason} from "./seasons.mjs";
 import "./garden.css";
-const STYLES=[{id:"real",name:"写实",description:"自然光 · 真实纹理"},{id:"anime",name:"动漫",description:"赛璐璐 · 明快色层"},{id:"ink",name:"水墨",description:"淡墨远山 · 宣纸留白"}];
 export default function SeasonGarden(){
  const host=useRef<HTMLDivElement>(null);
- const control=useRef({elapsed:0,automatic:true,paused:false,style:"real",revision:0,reset:0});
+ const control=useRef({elapsed:0,automatic:true,paused:false,revision:0,reset:0});
  const [season,setSeason]=useState(sampleSeason(0));
- const [automatic,setAutomatic]=useState(true),[paused,setPaused]=useState(false),[style,setStyle]=useState("real");
+ const [automatic,setAutomatic]=useState(true),[paused,setPaused]=useState(false);
  const [status,setStatus]=useState("loading"),[retry,setRetry]=useState(0);
  useEffect(()=>{
   let disposed=false,cleanup=()=>{};
@@ -64,7 +63,6 @@ export default function SeasonGarden(){
     if(!c.paused){time+=dt;if(c.automatic)c.elapsed+=dt;}
     if(c.revision!==previousRevision){
      previousRevision=c.revision;dirty=true;renderer.shadowMap.needsUpdate=true;
-     if(world.style!==c.style){model.setGardenStyle(world,c.style);presentation.setStyle(c.style);}
      if(c.reset!==previousReset){previousReset=c.reset;home();}
     }
     orbit.enableDamping=!c.paused&&!reduce.matches;
@@ -109,13 +107,11 @@ export default function SeasonGarden(){
  },[retry]);
  function change(values:Partial<typeof control.current>){Object.assign(control.current,values);control.current.revision++;host.current?.dispatchEvent(new Event("garden-control"));}
  function select(i:number){const elapsed=i*SEASON_DURATION_SECONDS;setSeason(sampleSeason(elapsed));setAutomatic(false);change({elapsed,automatic:false});}
- function chooseStyle(id:string){setStyle(id);change({style:id});}
- return <><section className={"season-garden garden-"+style} aria-label="四季成长花园" data-status={status}>
+ return <><section className="season-garden" aria-label="四季成长花园" data-status={status}>
   <div className="garden-canvas" ref={host}/>
   <div className="garden-vignette" aria-hidden="true"/>
   <header className="garden-heading"><p>THE ART OF GROWING</p><h1>一起生长，<span>穿过四季。</span></h1><span>我的思考，她的世界。</span></header>
   <div className="garden-season" aria-live="polite"><span>{season.transitioning?"SEASON IN TRANSITION":SEASONS[season.from].en}</span><strong>{season.label}</strong><p>{season.transitioning?"四季，正在交接。":SEASONS[season.from].note}</p></div>
-  <div className="garden-style-switch" role="group" aria-label="选择画风">{STYLES.map(s=><button key={s.id} aria-pressed={style===s.id} onClick={()=>chooseStyle(s.id)}><span>{s.name}</span><small>{s.description}</small></button>)}</div>
   {status!=="ready"&&<div className="garden-fallback" role="status"><p>{status==="loading"?"正在载入树木材质与自然光……":"3D 场景暂时无法载入，成长记录仍可正常使用。"}</p>{status==="fallback"&&<button onClick={()=>{setStatus("loading");setRetry(v=>v+1);}}>重新载入场景</button>}</div>}
   <div className="garden-bottom">
    <p className="garden-gesture">拖动旋转 · 滚轮缩放 · 右键平移<span>手机：单指旋转 · 双指缩放 / 平移</span></p>
