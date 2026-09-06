@@ -56,7 +56,7 @@ function surface(kind,assets,grad){
  if(kind==="bark"&&assets.barkNormal){real.normalMap=assets.barkNormal;real.normalScale.set(.7,.7);}
  if(kind==="bark"&&assets.barkRoughness)real.roughnessMap=assets.barkRoughness;
  const toon=new T.MeshToonMaterial({...common,gradientMap:grad});
- const ink=new T.MeshToonMaterial({...common,gradientMap:grad});
+ const ink=new T.MeshLambertMaterial({...common});
  if(kind==="leaf"){
   // The extracted leaf is RGBA, shared by shadow depth and all three styles.
   for(const material of [real,toon,ink]){
@@ -151,7 +151,7 @@ export function buildGarden(low=false,assets={}){
   function branch(start,direction,length,radius,depth){
    const points=[start.clone()];const dir=direction.clone();
    for(let j=1;j<=4;j++){
-    dir.x+= (random()-.5)*.13;dir.z+=(random()-.5)*.13;dir.y+=.055;dir.normalize();
+    dir.x+= (random()-.5)*.13;dir.z+=(random()-.5)*.13;dir.y+=.12;dir.normalize();
     points.push(points.at(-1).clone().addScaledVector(dir,length/4));
    }
    branchParts.push(geometryForBranch(points,radius,radius*.22));
@@ -159,7 +159,7 @@ export function buildGarden(low=false,assets={}){
    if(depth===0){tips.push({point:points.at(-1),direction:dir});tips.push({point:points[3],direction:dir});return;}
    for(let j=0;j<3;j++){
     const at=j===0?points[3]:points[4],az=random()*TAU;
-    const next=dir.clone().multiplyScalar(.48).add(new T.Vector3(Math.cos(az)*.65,.2+random()*.5,Math.sin(az)*.65)).normalize();
+    const next=dir.clone().multiplyScalar(1.05).add(new T.Vector3(Math.cos(az)*.43,.12+random()*.3,Math.sin(az)*.43)).normalize();
     branch(at,next,length*(.53+random()*.17),radius*.48,depth-1);
    }
   }

@@ -60,16 +60,15 @@ export default function SeasonGarden(){
    function wake(){dirty=true;if(!inFrame)start();}
    function render(now:number){
     frame=0;if(disposed||lostContext||!visible||!inView)return;inFrame=true;
-    const c=control.current,dt=last?Math.min((now-last)/1000,.05):0;last=now;
+    const c=control.current,dt=last?Math.min((now-last)/1000,.1):0;last=now;
     if(!c.paused){time+=dt;if(c.automatic)c.elapsed+=dt;}
     if(c.revision!==previousRevision){
-     previousRevision=c.revision;dirty=true;
+     previousRevision=c.revision;dirty=true;renderer.shadowMap.needsUpdate=true;
      if(world.style!==c.style){model.setGardenStyle(world,c.style);presentation.setStyle(c.style);}
      if(c.reset!==previousReset){previousReset=c.reset;home();}
     }
     orbit.enableDamping=!c.paused&&!reduce.matches;
     renderer.shadowMap.autoUpdate=!c.paused;
-    if(dirty)renderer.shadowMap.needsUpdate=true;
     const changed=orbit.update();
     if(changed)dirty=true;
     if(dirty||(!c.paused&&now-lastRender>(low?33:24))){

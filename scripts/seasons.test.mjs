@@ -37,7 +37,7 @@ test("seeded geometry and three genuinely different material systems",()=>{
  for(const style of ["real","anime","ink"]){
   setGardenStyle(low,style);
   assert.equal(low.style,style);assert.equal(low.sky.visible,style==="real");
-  assert.equal(low.trees[0].bark.material.type,style==="real"?"MeshStandardMaterial":"MeshToonMaterial");
+  assert.equal(low.trees[0].bark.material.type,style==="real"?"MeshStandardMaterial":style==="ink"?"MeshLambertMaterial":"MeshToonMaterial");
   for(const seconds of [0,18,20,22,42,44,64,66,86,88]){
    updateGarden(low,sampleSeason(seconds),12);
    for(const tree of low.trees)assert.ok(Array.from(tree.leaves.instanceMatrix.array).every(Number.isFinite));
