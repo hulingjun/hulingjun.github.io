@@ -78,6 +78,7 @@ export default function SeasonGarden(){
      element.dataset.season=sampled.label;
      element.dataset.seasonMix=sampled.mix.toFixed(4);
      element.dataset.weatherTime=time.toFixed(3);
+     element.dataset.weatherPaused=String(c.paused);
      element.dataset.camera=camera.position.toArray().concat(orbit.target.toArray()).map((n:number)=>n.toFixed(3)).join(",");
      dirty=false;lastRender=now;
     }

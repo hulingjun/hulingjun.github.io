@@ -62,7 +62,8 @@ try{
  const activeBefore=await camera();await page.mouse.move(x,y);
  for(let i=0;i<5;i++)await page.mouse.wheel(0,-70);
  await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,activeBefore);
- await page.getByRole("button",{name:"暂停天气",exact:true}).click();await page.waitForTimeout(500);
+ await page.getByRole("button",{name:"暂停天气",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector(".garden-canvas").dataset.weatherPaused==="true");
  const pausedTime=await scene.getAttribute("data-weather-time");
  const pausedBefore=await camera();await page.mouse.move(x,y);await page.mouse.wheel(0,200);
  await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,pausedBefore);

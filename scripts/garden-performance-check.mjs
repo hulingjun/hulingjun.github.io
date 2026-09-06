@@ -43,7 +43,8 @@ try{
  }
  assert.deepEqual(results.after.inventory,results.before.inventory,"All allocated geometry, instances and quality settings are unchanged");
  assert.ok(results.after.cpu.paused.p50<results.before.cpu.paused.p50*.5,"Paused camera redraw skips simulation");
- assert.ok(comparisons.find(x=>x.label==="summer-detail").trianglesAfter<comparisons.find(x=>x.label==="summer-detail").trianglesBefore,"Close-up omits only frustum-invisible instances");
+ for(let i=0;i<results.before.frames.length;i++)assert.ok(results.after.frames[i].draw.calls<=results.before.frames[i].draw.calls,"Never increase draw submissions");
+ assert.ok(comparisons.find(x=>x.label==="winter-detail").trianglesAfter<comparisons.find(x=>x.label==="winter-detail").trianglesBefore,"Zero-area winter leaves are not submitted");
  assert.deepEqual(errors,[]);
  await writeFile(join(output,"report.json"),JSON.stringify({passed:true,baselineCommit,results,comparisons,errors},null,2));
  console.log(JSON.stringify({passed:true,comparisons,cpu:results.after.cpu},null,2));

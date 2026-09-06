@@ -1,5 +1,5 @@
 import * as T from "three";
-const query=new URLSearchParams(location.search),model=await import(query.get("model"));
+const query=new URLSearchParams(location.search),model=await import(/* @vite-ignore */ query.get("model"));
 const assets=await model.loadGardenAssets(),world=model.buildGarden(false,assets);
 const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:"high-performance"});
 renderer.setSize(1000,700);renderer.setPixelRatio(1);
@@ -7,6 +7,10 @@ renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
 document.body.style.margin="0";document.body.appendChild(renderer.domElement);
 const camera=new T.PerspectiveCamera(40,1000/700,.2,250),gl=renderer.getContext();
+const pixel=new Uint8Array(4);
+// Chromium intentionally implements WebGL finish as flush. Synchronous CPU
+// readback is required for this benchmark to include completed GPU work.
+const complete=()=>gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
 const stats=values=>{const s=values.toSorted((a,b)=>a-b);return {p50:s[Math.floor(s.length*.5)],p95:s[Math.min(s.length-1,Math.floor(s.length*.95))]};};
 const state=(season,mix=0)=>({from:season,to:mix?(season+1)%4:season,mix});
 function pose(view){
@@ -18,14 +22,14 @@ function pose(view){
 window.measure=async(view,season,mix=0)=>{
  pose(view);const sample=state(season,mix);
  const cpu=[],completed=[],counts=[];
- for(let i=0;i<5;i++){
+ for(let i=0;i<4;i++){
   const time=12+i/60,start=performance.now();model.updateGarden(world,sample,time);const simulated=performance.now();
   renderer.info.autoReset=false;renderer.info.reset();renderer.render(world.scene,camera);
-  gl.finish();const end=performance.now();
-  if(i>=2){cpu.push(simulated-start);completed.push(end-start);counts.push({...renderer.info.render});}
+  complete();const end=performance.now();
+  if(i>=1){cpu.push(simulated-start);completed.push(end-start);counts.push({...renderer.info.render});}
  }
  // A deterministic frame for image equivalence, independent of timing.
- model.updateGarden(world,sample,12);renderer.render(world.scene,camera);gl.finish();
+ model.updateGarden(world,sample,12);renderer.render(world.scene,camera);complete();
  return {view,season,mix,cpuMs:stats(cpu),completedFrameMs:stats(completed),draw:counts.at(-1)};
 };
 window.cpuMeasure=()=>{

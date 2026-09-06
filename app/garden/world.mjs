@@ -1,4 +1,3 @@
-import {batchInstances,syncBatches} from "./instance-batches.mjs";
 import * as T from "three";
 import {HDRLoader} from "three/addons/loaders/HDRLoader.js";
 import {Sky} from "three/addons/objects/Sky.js";
@@ -233,8 +232,10 @@ export function buildGarden(low=false,assets={}){
    dummy.position.copy(s.petioleEnd);dummy.quaternion.copy(s.quaternion);dummy.scale.setScalar(s.scale);dummy.updateMatrix();
    leaves.setMatrixAt(i,dummy.matrix);dummy.matrix.toArray(baseMatrices,i*16);leaves.setColorAt(i,color.set("#ffffff"));
   });
-  const leafBatches=batchInstances(leaves,1.7,.12),petioleBatches=batchInstances(petioles,1.7);
-  group.remove(leaves,petioles);group.add(leafBatches.group,petioleBatches.group);
+  // One draw per tree, with fixed maximum-growth bounds; the shadow pass
+  // tests these bounds against its own light frustum, not the viewer's.
+  leaves.computeBoundingSphere();leaves.boundingSphere.radius+=.12;leaves.frustumCulled=true;
+  petioles.computeBoundingSphere();petioles.frustumCulled=true;
   const snow=new T.Mesh(bark.geometry,new T.MeshStandardMaterial({color:"#e7edf0",roughness:1,transparent:true,opacity:0,polygonOffset:true,polygonOffsetFactor:-1}));
   snow.material.onBeforeCompile=shader=>{
    shader.vertexShader="varying float gardenUp;\n"+shader.vertexShader;
@@ -244,7 +245,7 @@ export function buildGarden(low=false,assets={}){
   };
   snow.material.depthWrite=false;
   snow.scale.setScalar(1.018);group.add(snow);
-  trees.push({group,bark,leaves,petioles,seeds,shoots,snow,baseMatrices,leafBatches,petioleBatches});
+  trees.push({group,bark,leaves,petioles,seeds,shoots,snow,baseMatrices});
  }
  // Grass blades form the clearing, not a floating pedestal.
  const grassGeo=new T.PlaneGeometry(.045,.4,1,4);grassGeo.translate(0,.2,0);
@@ -257,7 +258,7 @@ export function buildGarden(low=false,assets={}){
   const az=random()*TAU,r=Math.sqrt(random())*12,x=Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z),z);dummy.rotation.set((random()-.5)*.4,random()*TAU, (random()-.5)*.4);dummy.scale.setScalar(.3+random()*.9);dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix);
  }
- const grassBatches=batchInstances(grass,3);scene.add(grassBatches.group);
+ grass.computeBoundingSphere();grass.frustumCulled=true;scene.add(grass);
  const count=low?180:440,seeds=[],positions=new Float32Array(count*3),rainPositions=new Float32Array(count*6);
  for(let i=0;i<count;i++)seeds.push({x:(random()-.5)*24,y:random()*13,z:(random()-.5)*18,phase:random()*TAU,speed:.5+random()});
  const particlesGeo=new T.BufferGeometry();particlesGeo.setAttribute("position",new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));
@@ -276,7 +277,7 @@ export function buildGarden(low=false,assets={}){
   const az=random()*TAU,r=Math.sqrt(random())*3.1,x=(i%2===0?-2.7:2.8)+Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z)+.025,z);dummy.rotation.set(-Math.PI/2,0,random()*TAU);dummy.scale.setScalar(.45+random()*.65);dummy.updateMatrix();fallen.setMatrixAt(i,dummy.matrix);color.set("#be6c29").lerp(new T.Color("#ddae54"),random());fallen.setColorAt(i,color);
  }
- return {scene,assets,wind,snowWeight,surfaces,trees,ground,grass,grassBatches,mountains,sky,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,seasonKey:"",lastTime:NaN,low,scratch:{sun:new T.Vector3(),origin:new T.Vector3(),dummy:new T.Object3D(),color:new T.Color()}};
+ return {scene,assets,wind,snowWeight,surfaces,trees,ground,grass,mountains,sky,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,seasonKey:"",lastTime:NaN,low,scratch:{sun:new T.Vector3(),origin:new T.Vector3(),dummy:new T.Object3D(),color:new T.Color()}};
 }
 export function updateGarden(w,state,time){
  const {from,to,mix}=state,a=palette[from],b=palette[to];
@@ -294,7 +295,7 @@ export function updateGarden(w,state,time){
   w.scene.fog.near=28;w.scene.fog.far=110;
   w.ground.material.color.copy(blend("ground"));
   w.grass.material.color.copy(blend("ground")).multiplyScalar(.72);
-  w.grass.visible=winter<.95;w.grassBatches.group.visible=w.grass.visible;
+  w.grass.visible=winter<.95;
   w.light.color.copy(blend("sun"));
   w.sky.material.uniforms.rayleigh.value=1.4+autumn*.7-winter*.4;
   w.sky.material.uniforms.turbidity.value=3+spring*2+winter*4;
@@ -302,8 +303,7 @@ export function updateGarden(w,state,time){
   const c1=blend("leaf"),c2=blend("tip");
   for(const tree of w.trees){
    tree.snow.material.opacity=winter*.9;tree.snow.visible=winter>.01;tree.petioles.visible=winter<.99;
-   tree.petioleBatches.group.visible=tree.petioles.visible;
-   tree.leafBatches.group.visible=winter<1;
+   tree.leaves.visible=winter<1;
    const matrices=tree.leaves.instanceMatrix.array,colors=tree.leaves.instanceColor.array,base=tree.baseMatrices;
    for(let i=0;i<tree.seeds.length;i++){
     const s=tree.seeds[i],growth=Math.max(0,1-winter-autumn*s.drop*.58)*(.82+summer*.18),m=i*16,c=i*3;
@@ -312,7 +312,6 @@ export function updateGarden(w,state,time){
     colors[c]=c1.r+(c2.r-c1.r)*s.tone;colors[c+1]=c1.g+(c2.g-c1.g)*s.tone;colors[c+2]=c1.b+(c2.b-c1.b)*s.tone;
    }
    tree.leaves.instanceMatrix.needsUpdate=true;tree.leaves.instanceColor.needsUpdate=true;
-   syncBatches(tree.leafBatches);
   }
   w.mountains.forEach((m,i)=>m.material.color.set("#728b78").lerp(w.scene.fog.color,.2+i*.18));
   w.falling.visible=autumn>.01;w.fallen.visible=autumn>.01;
