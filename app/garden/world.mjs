@@ -86,17 +86,18 @@ export async function loadGardenAssets(){
  const names={bark:"bark.webp",barkNormal:"bark-normal.webp",barkRoughness:"bark-roughness.webp",ground:"ground.webp",leaf:"leaf.png",leafSilhouette:"leaf-silhouette.png"};
  const assets={};
  try{
-  await Promise.all(Object.entries(names).map(async([key,file])=>{
+  const loaded=await Promise.allSettled(Object.entries(names).map(async([key,file])=>{
    const texture=await loader.loadAsync("/garden-assets/"+file);assets[key]=texture;
    if(["bark","ground","leaf"].includes(key))texture.colorSpace=T.SRGBColorSpace;
    texture.anisotropy=4;
    if(key!=="leaf"&&key!=="leafSilhouette"){texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(key==="ground"?55:1,key==="ground"?55:2);}
   }));
+  const failed=loaded.find(r=>r.status==="rejected");if(failed)throw failed.reason;
   return assets;
  }catch(error){Object.values(assets).forEach(t=>t.dispose());throw error;}
 }
 export function buildGarden(low=false,assets={}){
- const random=seeded(1337),scene=new T.Scene(),wind={value:0},grad=gradient();
+ const random=seeded(1337),scene=new T.Scene(),wind={value:0},snowWeight={value:0},grad=gradient();
  scene.background=new T.Color("#b3cdc2");scene.fog=new T.Fog("#b8cbb4",22,75);
  const hemi=new T.HemisphereLight("#d8e8f8","#637348",2.1);scene.add(hemi);
  const light=new T.DirectionalLight("#ffebcb",3.1);light.position.set(-8,12,-6);light.castShadow=true;
@@ -111,6 +112,11 @@ export function buildGarden(low=false,assets={}){
  const disc=new T.Mesh(new T.SphereGeometry(1.45,32,24),new T.MeshBasicMaterial({color:"#bb614e",fog:false}));disc.position.copy(sunDirection).multiplyScalar(55);scene.add(disc);disc.visible=false;
 
  const surfaces={bark:surface("bark",assets,grad),leaf:surface("leaf",assets,grad),ground:surface("ground",assets,grad)};
+ surfaces.ground.real.onBeforeCompile=shader=>{
+  shader.uniforms.gardenSnow=snowWeight;
+  shader.fragmentShader="uniform float gardenSnow;\n"+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace("#include <map_fragment>","#include <map_fragment>\n diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.90,.93),gardenSnow);");
+ };
  Object.values(surfaces.leaf).forEach(m=>windShader(m,wind));
  const groundGeo=new T.PlaneGeometry(170,170,low?80:120,low?80:120);groundGeo.rotateX(-Math.PI/2);
  const gp=groundGeo.attributes.position;
@@ -173,6 +179,13 @@ export function buildGarden(low=false,assets={}){
   const leaves=new T.InstancedMesh(leafGeo,surfaces.leaf.real,seeds.length);leaves.frustumCulled=false;leaves.castShadow=true;leaves.receiveShadow=true;leaves.customDepthMaterial=leafDepth;
   leaves.instanceMatrix.setUsage(T.DynamicDrawUsage);group.add(leaves);
   const snow=new T.Mesh(bark.geometry,new T.MeshStandardMaterial({color:"#e7edf0",roughness:1,transparent:true,opacity:0,polygonOffset:true,polygonOffsetFactor:-1}));
+  snow.material.onBeforeCompile=shader=>{
+   shader.vertexShader="varying float gardenUp;\n"+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace("#include <beginnormal_vertex>","#include <beginnormal_vertex>\n gardenUp=(mat3(modelMatrix)*objectNormal).y;");
+   shader.fragmentShader="varying float gardenUp;\n"+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace("#include <alphatest_fragment>","#include <alphatest_fragment>\n diffuseColor.a*=smoothstep(.05,.55,gardenUp);if(diffuseColor.a<.02)discard;");
+  };
+  snow.material.depthWrite=false;
   snow.scale.setScalar(1.018);group.add(snow);
   trees.push({group,bark,leaves,seeds,snow});
  }
@@ -203,7 +216,7 @@ export function buildGarden(low=false,assets={}){
   const az=random()*TAU,r=Math.sqrt(random())*3.1,x=(i%2===0?-2.7:2.8)+Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z)+.025,z);dummy.rotation.set(-Math.PI/2,0,random()*TAU);dummy.scale.setScalar(.45+random()*.65);dummy.updateMatrix();fallen.setMatrixAt(i,dummy.matrix);color.set("#be6c29").lerp(new T.Color("#ddae54"),random());fallen.setColorAt(i,color);
  }
- return {scene,assets,grad,wind,surfaces,trees,ground,grass,mountains,sky,disc,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,style:"",seasonKey:"",low};
+ return {scene,assets,grad,wind,snowWeight,surfaces,trees,ground,grass,mountains,sky,disc,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,style:"",seasonKey:"",low};
 }
 export function setGardenStyle(w,style){
  if(!palettes[style])style="real";
@@ -218,7 +231,7 @@ export function updateGarden(w,state,time){
  const blend=key=>new T.Color(a[key]).lerp(new T.Color(b[key]),mix);
  const weight=i=>(from===i?1-mix:0)+(to===i?mix:0);
  const spring=weight(0),summer=weight(1),autumn=weight(2),winter=weight(3);
- w.wind.value=time;
+ w.wind.value=time;w.snowWeight.value=winter;
  const key=[style,from,to,mix.toFixed(3)].join(":");
  if(w.seasonKey!==key){
   w.seasonKey=key;w.scene.background.copy(blend("sky"));w.scene.fog.color.copy(blend("fog"));

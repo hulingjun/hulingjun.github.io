@@ -37,7 +37,7 @@ test("seeded geometry and three genuinely different material systems",()=>{
   }
   updateGarden(low,sampleSeason(66),12);
   assert.equal(low.rainMat.opacity,0);assert.equal(low.falling.visible,false);
-  assert.equal(low.trees[0].leaves.instanceMatrix.array[0],0);
+  assert.equal(Math.abs(low.trees[0].leaves.instanceMatrix.array[0]),0);
   updateGarden(low,sampleSeason(44),12);assert.equal(low.falling.visible,true);
  }
  let released=0;low.trees[0].leaves.geometry.addEventListener("dispose",()=>released++);
