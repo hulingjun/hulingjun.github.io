@@ -64,7 +64,7 @@ try{
  await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,activeBefore);
  await page.getByRole("button",{name:"暂停天气",exact:true}).click();await page.waitForTimeout(500);
  const pausedTime=await scene.getAttribute("data-weather-time");
- const pausedBefore=await camera();await page.mouse.wheel(0,200);
+ const pausedBefore=await camera();await page.mouse.move(x,y);await page.mouse.wheel(0,200);
  await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,pausedBefore);
  assert.equal(await scene.getAttribute("data-weather-time"),pausedTime);
  results.push("Active-weather wheel zoom, pause, and further paused zoom remain responsive");
