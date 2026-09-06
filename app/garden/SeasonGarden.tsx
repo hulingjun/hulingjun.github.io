@@ -47,7 +47,7 @@ export default function SeasonGarden(){
    presentation=createPresentation(renderer,world.scene,camera);
    const home=()=>{
     const damping=orbit.enableDamping;orbit.enableDamping=false;orbit.update();
-    const distance=Math.max(19,11/(2*Math.tan(Math.PI/9)*camera.aspect));
+    const distance=Math.max(19,(low?13.5:11)/(2*Math.tan(Math.PI/9)*camera.aspect));
     orbit.target.set(0,2.4,0);camera.position.set(distance*.12,2.4+distance*.15,distance);
     orbit.update();orbit.saveState();orbit.enableDamping=damping;dirty=true;
    };
@@ -113,7 +113,7 @@ export default function SeasonGarden(){
  return <><section className={"season-garden garden-"+style} aria-label="四季成长花园" data-status={status}>
   <div className="garden-canvas" ref={host}/>
   <div className="garden-vignette" aria-hidden="true"/>
-  <header className="garden-heading"><p>THE ART OF GROWING</p><h1>一起生长，穿过四季。</h1><span>我的思考，她的世界。</span></header>
+  <header className="garden-heading"><p>THE ART OF GROWING</p><h1>一起生长，<span>穿过四季。</span></h1><span>我的思考，她的世界。</span></header>
   <div className="garden-season" aria-live="polite"><span>{season.transitioning?"SEASON IN TRANSITION":SEASONS[season.from].en}</span><strong>{season.label}</strong><p>{season.transitioning?"四季，正在交接。":SEASONS[season.from].note}</p></div>
   <div className="garden-style-switch" role="group" aria-label="选择画风">{STYLES.map(s=><button key={s.id} aria-pressed={style===s.id} onClick={()=>chooseStyle(s.id)}><span>{s.name}</span><small>{s.description}</small></button>)}</div>
   {status!=="ready"&&<div className="garden-fallback" role="status"><p>{status==="loading"?"正在载入树木材质与自然光……":"3D 场景暂时无法载入，成长记录仍可正常使用。"}</p>{status==="fallback"&&<button onClick={()=>{setStatus("loading");setRetry(v=>v+1);}}>重新载入场景</button>}</div>}

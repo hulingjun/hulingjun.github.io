@@ -66,6 +66,11 @@ try{
  const mp=await mobile.newPage();mp.on("pageerror",e=>errors.push(e.message));
  await mp.goto("http://127.0.0.1:4173/",{waitUntil:"networkidle"});
  await mp.locator('.season-garden[data-status="ready"]').waitFor({timeout:90000});
+ const headingBox=await mp.locator(".garden-heading").boundingBox(),styleBox=await mp.locator(".garden-style-switch").boundingBox();
+ assert.ok(headingBox.y+headingBox.height<styleBox.y,"Mobile title must not overlap the style controls");
+ for(const label of await mp.locator(".garden-style-switch button > span").all()){
+  const bounds=await label.boundingBox();assert.ok(bounds.height<25&&bounds.width>30,"Style labels stay on one line");
+ }
  const ms=mp.locator(".garden-canvas"),mb=await ms.boundingBox(),client=await mobile.newCDPSession(mp);
  const mx=mb.x+195,my=mb.y+350;
  const mbefore=await ms.getAttribute("data-camera");

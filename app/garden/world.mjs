@@ -111,7 +111,7 @@ export function buildGarden(low=false,assets={}){
  const sky=new Sky();sky.scale.setScalar(180);scene.add(sky);
  sky.material.uniforms.turbidity.value=3.8;sky.material.uniforms.rayleigh.value=1.45;
  sky.material.uniforms.mieCoefficient.value=.006;sky.material.uniforms.mieDirectionalG.value=.83;
- const sunDirection=new T.Vector3(.52,.33,-.78).normalize();sky.material.uniforms.sunPosition.value.copy(sunDirection);light.position.copy(sunDirection).multiplyScalar(25);
+ const sunDirection=new T.Vector3(.32,.25,-.92).normalize();sky.material.uniforms.sunPosition.value.copy(sunDirection);light.position.copy(sunDirection).multiplyScalar(25);
  const disc=new T.Mesh(new T.SphereGeometry(1.45,32,24),new T.MeshBasicMaterial({color:"#bb614e",fog:false}));disc.position.copy(sunDirection).multiplyScalar(55);scene.add(disc);disc.visible=false;
 
  const surfaces={bark:surface("bark",assets,grad),leaf:surface("leaf",assets,grad),ground:surface("ground",assets,grad)};
@@ -240,6 +240,8 @@ export function updateGarden(w,state,time){
  const weight=i=>(from===i?1-mix:0)+(to===i?mix:0);
  const spring=weight(0),summer=weight(1),autumn=weight(2),winter=weight(3);
  w.wind.value=time;w.snowWeight.value=winter;
+ const sunshine=new T.Vector3(.32,.25+summer*.035-winter*.07+Math.sin(time*.055)*.018,-.92).normalize();
+ w.sky.material.uniforms.sunPosition.value.copy(sunshine);w.light.position.copy(sunshine).multiplyScalar(25);w.disc.position.copy(sunshine).multiplyScalar(55);
  const key=[style,from,to,mix.toFixed(3)].join(":");
  if(w.seasonKey!==key){
   w.seasonKey=key;w.scene.background.copy(blend("sky"));w.scene.fog.color.copy(blend("fog"));
