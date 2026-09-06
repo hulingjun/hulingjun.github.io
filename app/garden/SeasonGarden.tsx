@@ -62,22 +62,23 @@ export default function SeasonGarden(){
     const c=control.current,dt=last?Math.min((now-last)/1000,.1):0;last=now;
     if(!c.paused){time+=dt;if(c.automatic)c.elapsed+=dt;}
     if(c.revision!==previousRevision){
-     previousRevision=c.revision;dirty=true;renderer.shadowMap.needsUpdate=true;
+     previousRevision=c.revision;dirty=true;
      if(c.reset!==previousReset){previousReset=c.reset;home();}
     }
     orbit.enableDamping=!c.paused&&!reduce.matches;
-    renderer.shadowMap.autoUpdate=!c.paused;
+    renderer.shadowMap.autoUpdate=false;
     const changed=orbit.update();
     if(changed)dirty=true;
     if(dirty||(!c.paused&&now-lastRender>(low?33:24))){
      const sampled=sampleSeason(c.elapsed);
-     model.updateGarden(world,sampled,time);
+     if(model.updateGarden(world,sampled,time))renderer.shadowMap.needsUpdate=true;
      presentation.render();
      const labelKey=sampled.from+":"+sampled.to;
      if(labelKey!==previousLabel){previousLabel=labelKey;setSeason(sampled);}
      element.dataset.season=sampled.label;
      element.dataset.seasonMix=sampled.mix.toFixed(4);
      element.dataset.weatherTime=time.toFixed(3);
+     element.dataset.weatherPaused=String(c.paused);
      element.dataset.camera=camera.position.toArray().concat(orbit.target.toArray()).map((n:number)=>n.toFixed(3)).join(",");
      dirty=false;lastRender=now;
     }

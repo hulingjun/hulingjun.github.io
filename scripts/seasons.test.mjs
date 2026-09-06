@@ -90,3 +90,24 @@ test("fine twig UVs never fold or mirror their normal map",()=>{
   g.dispose();
  }
 });
+
+test("performance caches retain full detail with conservative per-tree bounds",()=>{
+ const world=buildGarden(false);
+ assert.equal(world.trees.reduce((sum,t)=>sum+t.leaves.count,0),7920);
+ assert.equal(world.grass.count,10000);assert.deepEqual(world.light.shadow.mapSize.toArray(),[2048,2048]);
+ for(const mesh of [...world.trees.flatMap(t=>[t.leaves,t.petioles]),world.grass]){
+  assert.equal(mesh.frustumCulled,true);const matrix=new Matrix4();
+  for(let i=0;i<mesh.count;i++){
+   mesh.getMatrixAt(i,matrix);assert.ok(mesh.boundingSphere.containsPoint(new Vector3().setFromMatrixPosition(matrix)));
+  }
+ }
+ updateGarden(world,sampleSeason(22),12);
+ const versions=()=>world.trees.map(t=>t.leaves.instanceMatrix.version).concat(world.particles.geometry.attributes.position.version,world.rain.geometry.attributes.position.version,world.falling.instanceMatrix.version);
+ const before=versions();
+ for(let i=0;i<100;i++)assert.equal(updateGarden(world,sampleSeason(22),12),false);
+ assert.deepEqual(versions(),before,"Camera-only updates make no buffer uploads");
+ updateGarden(world,sampleSeason(66),13);for(const t of world.trees)assert.equal(t.leaves.visible,false);
+ assert.equal(world.rain.visible,false);
+ updateGarden(world,sampleSeason(0),14);assert.equal(world.particles.visible,false);
+ disposeGarden(world);
+});

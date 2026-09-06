@@ -55,6 +55,20 @@ try{
  // Keep camera verification independent of Chromium's extra WebGL readback.
 
  results.push("Desktop: drag rotate, wheel zoom, right pan, exact reset, paused interaction");
+ // Exercise zoom while full weather/shadows are animating, not just paused QA.
+ const frozenTime=Number(await scene.getAttribute("data-weather-time"));
+ await page.getByRole("button",{name:"播放天气",exact:true}).click();
+ await page.waitForFunction(t=>Number(document.querySelector(".garden-canvas").dataset.weatherTime)>t+.05,frozenTime);
+ const activeBefore=await camera();await page.mouse.move(x,y);
+ for(let i=0;i<5;i++)await page.mouse.wheel(0,-70);
+ await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,activeBefore);
+ await page.getByRole("button",{name:"暂停天气",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector(".garden-canvas").dataset.weatherPaused==="true");
+ const pausedTime=await scene.getAttribute("data-weather-time");
+ const pausedBefore=await camera();await page.mouse.move(x,y);await page.mouse.wheel(0,200);
+ await page.waitForFunction(c=>document.querySelector(".garden-canvas").dataset.camera!==c,pausedBefore);
+ assert.equal(await scene.getAttribute("data-weather-time"),pausedTime);
+ results.push("Active-weather wheel zoom, pause, and further paused zoom remain responsive");
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await context.close();
  // Mobile uses real Chromium touch events, not synthetic mouse aliases.
