@@ -40,10 +40,13 @@ const alpha=await sharp(opacity).extract(rect).greyscale().raw().toBuffer();
 const rawOptions={raw:{width:rect.width,height:rect.height,channels:1}};
 await sharp(color).extract(rect).modulate({saturation:0,brightness:1.65}).joinChannel(alpha,rawOptions).png().toFile(join(output,"leaf.png"));
 await sharp({create:{width:rect.width,height:rect.height,channels:3,background:"#ffffff"}}).joinChannel(alpha,rawOptions).png().toFile(join(output,"leaf-silhouette.png"));
+const environment=await download("https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr","995d68b1656f26452572645c0ffe898b");
+await writeFile(join(output,"environment.hdr"),environment);
 const credits={license:"CC0-1.0",assets:[
  {name:"Bark Brown 01",author:"Rob Tuytel",source:"https://polyhaven.com/a/bark_brown_01",license:"https://polyhaven.com/license",use:"PBR bark color, OpenGL normal, roughness; converted to WebP"},
  {name:"Grass Path 2",author:"Rob Tuytel",source:"https://polyhaven.com/a/grass_path_2",license:"https://polyhaven.com/license",use:"Meadow terrain color; converted to WebP"},
  {name:"Leaf Set 022",author:"ambientCG",source:"https://ambientcg.com/a/LeafSet022",license:"https://docs.ambientcg.com/license/",use:"Single complete leaf crop with opacity; luminance detail and silhouette variants"},
+ {name:"Kloppenheim 06 Pure Sky",author:"Greg Zaal / Jarod Guest",source:"https://polyhaven.com/a/kloppenheim_06_puresky",license:"https://polyhaven.com/license",use:"HDR environment lighting"},
  {name:"Analytic sky and scene rendering",author:"three.js contributors",source:"https://github.com/mrdoob/three.js",license:"MIT"}
 ]};
 await writeFile(join(output,"credits.json"),JSON.stringify(credits,null,2)+"\n");

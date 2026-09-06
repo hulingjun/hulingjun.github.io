@@ -46,8 +46,8 @@ export default function SeasonGarden(){
    presentation=createPresentation(renderer,world.scene,camera);
    const home=()=>{
     const damping=orbit.enableDamping;orbit.enableDamping=false;orbit.update();
-    const distance=Math.max(16,10/(2*Math.tan(Math.PI/9)*camera.aspect));
-    orbit.target.set(0,2.4,0);camera.position.set(distance*.2,2.4+distance*.22,distance);
+    const distance=Math.max(19,11/(2*Math.tan(Math.PI/9)*camera.aspect));
+    orbit.target.set(0,2.4,0);camera.position.set(distance*.12,2.4+distance*.15,distance);
     orbit.update();orbit.saveState();orbit.enableDamping=damping;dirty=true;
    };
    const resize=()=>{

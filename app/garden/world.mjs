@@ -1,4 +1,5 @@
 import * as T from "three";
+import {HDRLoader} from "three/addons/loaders/HDRLoader.js";
 import {Sky} from "three/addons/objects/Sky.js";
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
 export function seeded(seed=19){return()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};}
@@ -34,14 +35,14 @@ function geometryForBranch(points,startRadius,endRadius){
    const angle=j/radial*TAU,n=frames.normals[i].clone().multiplyScalar(Math.cos(angle)).addScaledVector(frames.binormals[i],Math.sin(angle));
    const v=p.clone().addScaledVector(n,radius*(1+.065*Math.sin(j*4+i*.7)));
    pos.push(v.x,v.y,v.z);normal.push(n.x,n.y,n.z);uv.push(j/radial,i/steps*points[0].distanceTo(points.at(-1))*1.3);
-   if(i<steps&&j<radial){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,b,a+1,b,b+1,a+1);}
+   if(i<steps&&j<radial){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,a+1,b,b,a+1,b+1);}
   }
  }
  const g=new T.BufferGeometry();g.setAttribute("position",new T.Float32BufferAttribute(pos,3));g.setAttribute("normal",new T.Float32BufferAttribute(normal,3));g.setAttribute("uv",new T.Float32BufferAttribute(uv,2));g.setIndex(indices);return g;
 }
 function leafGeometry(){
- const g=new T.PlaneGeometry(.3,.53,2,4),p=g.attributes.position;
- for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,.045*Math.sin((y/.53+.5)*Math.PI)+Math.abs(x)*.2);}
+ const g=new T.PlaneGeometry(.18,.32,2,4),p=g.attributes.position;
+ for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,.045*Math.sin((y/.32+.5)*Math.PI)+Math.abs(x)*.2);}
  g.computeVertexNormals();return g;
 }
 function gradient(){
@@ -93,12 +94,14 @@ export async function loadGardenAssets(){
    if(key!=="leaf"&&key!=="leafSilhouette"){texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(key==="ground"?55:1,key==="ground"?55:2);}
   }));
   const failed=loaded.find(r=>r.status==="rejected");if(failed)throw failed.reason;
+  assets.environment=await new HDRLoader().loadAsync("/garden-assets/environment.hdr");
+  assets.environment.mapping=T.EquirectangularReflectionMapping;
   return assets;
  }catch(error){Object.values(assets).forEach(t=>t.dispose());throw error;}
 }
 export function buildGarden(low=false,assets={}){
  const random=seeded(1337),scene=new T.Scene(),wind={value:0},snowWeight={value:0},grad=gradient();
- scene.background=new T.Color("#b3cdc2");scene.fog=new T.Fog("#b8cbb4",22,75);
+ scene.background=new T.Color("#b3cdc2");scene.fog=new T.Fog("#b8cbb4",28,110);
  const hemi=new T.HemisphereLight("#d8e8f8","#637348",2.1);scene.add(hemi);
  const light=new T.DirectionalLight("#ffebcb",3.1);light.position.set(-8,12,-6);light.castShadow=true;
  light.shadow.mapSize.set(low?1024:2048,low?1024:2048);
@@ -128,8 +131,8 @@ export function buildGarden(low=false,assets={}){
   const geo=new T.CylinderGeometry(1,1,1,100,18,true),p=geo.attributes.position;
   for(let i=0;i<p.count;i++){
    const angle=Math.atan2(p.getZ(i),p.getX(i)),height=(p.getY(i)+.5);
-   const ridge=4+4*Math.pow(Math.sin(angle*3+ring*.8),2)+2*Math.sin(angle*7+ring);
-   const radius=40+ring*14;
+   const ridge=3+3*Math.pow(Math.sin(angle*3+ring*.8),2)+1.2*Math.sin(angle*7+ring)+.4*Math.sin(angle*23);
+   const radius=48+ring*16;
    p.setXYZ(i,p.getX(i)*radius,(height*ridge-1)*(1+ring*.3),p.getZ(i)*radius);
   }
   geo.computeVertexNormals();const mat=new T.MeshStandardMaterial({color:0x799487,roughness:1,side:T.DoubleSide});
@@ -152,6 +155,7 @@ export function buildGarden(low=false,assets={}){
     points.push(points.at(-1).clone().addScaledVector(dir,length/4));
    }
    branchParts.push(geometryForBranch(points,radius,radius*.22));
+   if(depth===1)tips.push({point:points[3],direction:dir});
    if(depth===0){tips.push({point:points.at(-1),direction:dir});tips.push({point:points[3],direction:dir});return;}
    for(let j=0;j<3;j++){
     const at=j===0?points[3]:points[4],az=random()*TAU;
@@ -170,9 +174,9 @@ export function buildGarden(low=false,assets={}){
   }
   const bark=new T.Mesh(mergeGeometries(branchParts),surfaces.bark.real);branchParts.forEach(g=>g.dispose());
   bark.castShadow=true;bark.receiveShadow=true;group.add(bark);
-  const seeds=[],leavesPerTip=low?7:13;
+  const seeds=[],leavesPerTip=low?18:34;
   for(const tip of tips)for(let j=0;j<leavesPerTip;j++){
-   const spread=.1+random()*.36,az=random()*TAU,y=random()-.3;
+   const spread=.1+random()*.46,az=random()*TAU,y=random()-.3;
    seeds.push({x:tip.point.x+Math.cos(az)*spread,y:tip.point.y+y*.4,z:tip.point.z+Math.sin(az)*spread,
     rx:random()*TAU,ry:random()*TAU,rz:random()*TAU,scale:.6+random()*.9,tone:random(),drop:random()});
   }
@@ -190,11 +194,14 @@ export function buildGarden(low=false,assets={}){
   trees.push({group,bark,leaves,seeds,snow});
  }
  // Grass blades form the clearing, not a floating pedestal.
- const grassGeo=new T.PlaneGeometry(.065,.43,1,2);grassGeo.translate(0,.215,0);
+ const grassGeo=new T.PlaneGeometry(.045,.4,1,4);grassGeo.translate(0,.2,0);
+ const blades=grassGeo.attributes.position;
+ for(let i=0;i<blades.count;i++){const t=blades.getY(i)/.4;blades.setX(i,blades.getX(i)*(1-t));blades.setZ(i,t*t*.13);}
+ grassGeo.computeVertexNormals();
  const grassMat=new T.MeshStandardMaterial({color:"#6f8d49",roughness:1,side:T.DoubleSide});
- const grass=new T.InstancedMesh(grassGeo,grassMat,low?1600:4800);grass.receiveShadow=true;grass.frustumCulled=false;
+ const grass=new T.InstancedMesh(grassGeo,grassMat,low?4000:10000);grass.receiveShadow=true;grass.frustumCulled=false;
  for(let i=0;i<grass.count;i++){
-  const az=random()*TAU,r=Math.sqrt(random())*14,x=Math.cos(az)*r,z=Math.sin(az)*r;
+  const az=random()*TAU,r=Math.sqrt(random())*12,x=Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z),z);dummy.rotation.set((random()-.5)*.4,random()*TAU, (random()-.5)*.4);dummy.scale.setScalar(.3+random()*.9);dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix);
  }
  scene.add(grass);
@@ -220,7 +227,7 @@ export function buildGarden(low=false,assets={}){
 }
 export function setGardenStyle(w,style){
  if(!palettes[style])style="real";
- w.style=style;w.seasonKey="";
+ w.style=style;w.seasonKey="";w.scene.environment=style==="real"?(w.assets.environment||null):null;w.scene.environmentIntensity=.65;
  for(const tree of w.trees){tree.bark.material=w.surfaces.bark[style];tree.leaves.material=w.surfaces.leaf[style];}
  w.ground.material=w.surfaces.ground[style];w.falling.material=w.fallen.material=w.surfaces.leaf[style];
  w.sky.visible=style==="real";w.disc.visible=style!=="real";
@@ -235,7 +242,7 @@ export function updateGarden(w,state,time){
  const key=[style,from,to,mix.toFixed(3)].join(":");
  if(w.seasonKey!==key){
   w.seasonKey=key;w.scene.background.copy(blend("sky"));w.scene.fog.color.copy(blend("fog"));
-  w.scene.fog.near=style==="ink"?15:22;w.scene.fog.far=style==="ink"?62:85;
+  w.scene.fog.near=style==="ink"?24:28;w.scene.fog.far=style==="ink"?92:110;
   w.ground.material.color.copy(blend("ground"));
   w.grass.material.color.copy(blend("ground")).multiplyScalar(style==="real"?.72:.9);
   w.grass.visible=winter<.95;

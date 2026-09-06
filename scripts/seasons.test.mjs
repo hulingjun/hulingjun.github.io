@@ -1,3 +1,4 @@
+import {Vector3} from "three";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {SEASONS,sampleSeason,SEASON_CYCLE_SECONDS} from "../app/garden/seasons.mjs";
@@ -24,6 +25,13 @@ test("88-second season clock holds, transitions and loops in sync",()=>{
 test("seeded geometry and three genuinely different material systems",()=>{
  const a=seeded(42),b=seeded(42);for(let i=0;i<50;i++)assert.equal(a(),b());
  const low=buildGarden(true),full=buildGarden(false);
+ const geometry=full.trees[0].bark.geometry,positions=geometry.attributes.position,normals=geometry.attributes.normal;
+ for(let face=0;face<30;face++){
+  const ids=[0,1,2].map(k=>geometry.index.getX(face*3+k));
+  const [a,b,c]=ids.map(id=>new Vector3().fromBufferAttribute(positions,id));
+  const outward=new Vector3().fromBufferAttribute(normals,ids[0]);
+  assert.ok(b.sub(a).cross(c.sub(a)).dot(outward)>0,"Bark triangles must face outward");
+ }
  assert.equal(full.trees.length,2);assert.ok(low.trees[0].leaves.count<full.trees[0].leaves.count);
  assert.ok(low.particleSeeds.length<full.particleSeeds.length);
  for(const style of ["real","anime","ink"]){

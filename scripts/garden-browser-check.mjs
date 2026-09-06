@@ -35,7 +35,7 @@ try{
    await page.waitForTimeout(300);
    assert.equal(await scene.getAttribute("data-season-mix"),"0.0000");
    assert.equal(await page.locator(".garden-season strong").textContent(),season);
-   await page.locator(".season-garden").screenshot({path:join(output,style+"-"+i+".png")});
+   await page.screenshot({path:join(output,style+"-"+i+".png")});
    results.push(style+" / "+season+" label and scene agree");
   }
  }
@@ -51,7 +51,7 @@ try{
  assert.notEqual(await camera(),zoomed,"Right-drag pans");
  assert.equal(await scene.getAttribute("data-weather-time"),weather,"Pause freezes weather but not camera");
  await page.getByRole("button",{name:"恢复视角",exact:true}).click();await page.waitForTimeout(800);
- await page.locator(".season-garden").screenshot({path:join(output,"camera-reset.png")});
+ await page.screenshot({path:join(output,"camera-reset.png")});
  results.push("Desktop: drag rotate, wheel zoom, right pan, reset, paused interaction");
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  // Mobile uses real Chromium touch events, not synthetic mouse aliases.
