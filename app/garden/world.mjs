@@ -111,7 +111,7 @@ export function buildGarden(low=false,assets={}){
  const sky=new Sky();sky.scale.setScalar(180);scene.add(sky);
  sky.material.uniforms.turbidity.value=3.8;sky.material.uniforms.rayleigh.value=1.45;
  sky.material.uniforms.mieCoefficient.value=.006;sky.material.uniforms.mieDirectionalG.value=.83;
- const sunDirection=new T.Vector3(-.45,.29,-.78).normalize();sky.material.uniforms.sunPosition.value.copy(sunDirection);light.position.copy(sunDirection).multiplyScalar(25);
+ const sunDirection=new T.Vector3(.52,.33,-.78).normalize();sky.material.uniforms.sunPosition.value.copy(sunDirection);light.position.copy(sunDirection).multiplyScalar(25);
  const disc=new T.Mesh(new T.SphereGeometry(1.45,32,24),new T.MeshBasicMaterial({color:"#bb614e",fog:false}));disc.position.copy(sunDirection).multiplyScalar(55);scene.add(disc);disc.visible=false;
 
  const surfaces={bark:surface("bark",assets,grad),leaf:surface("leaf",assets,grad),ground:surface("ground",assets,grad)};
@@ -227,11 +227,12 @@ export function buildGarden(low=false,assets={}){
 }
 export function setGardenStyle(w,style){
  if(!palettes[style])style="real";
- w.style=style;w.seasonKey="";w.scene.environment=style==="real"?(w.assets.environment||null):null;w.scene.environmentIntensity=.65;
+ w.style=style;w.seasonKey="";w.scene.environment=style==="real"?(w.assets.environment||null):null;w.scene.environmentIntensity=.3;
  for(const tree of w.trees){tree.bark.material=w.surfaces.bark[style];tree.leaves.material=w.surfaces.leaf[style];}
  w.ground.material=w.surfaces.ground[style];w.falling.material=w.fallen.material=w.surfaces.leaf[style];
  w.sky.visible=style==="real";w.disc.visible=style!=="real";
- w.light.intensity=style==="real"?3.1:2.2;w.hemi.intensity=style==="ink"?2.8:2.0;
+ w.light.intensity=style==="real"?2.6:2.2;w.hemi.intensity=style==="ink"?2.8:style==="real"?1.05:1.6;
+ w.grass.count=style==="ink"?(w.low?160:350):style==="anime"?(w.low?1500:3500):(w.low?4000:10000);
 }
 export function updateGarden(w,state,time){
  const {from,to,mix}=state,style=w.style||"real",palette=palettes[style],a=palette[from],b=palette[to];

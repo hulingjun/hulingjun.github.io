@@ -52,7 +52,8 @@ try{
  assert.equal(await scene.getAttribute("data-weather-time"),weather,"Pause freezes weather but not camera");
  await page.getByRole("button",{name:"恢复视角",exact:true}).click();await page.waitForTimeout(800);
  await page.screenshot({path:join(output,"camera-reset.png")});
- results.push("Desktop: drag rotate, wheel zoom, right pan, reset, paused interaction");
+ assert.equal(await camera(),before,"Reset returns to exact home view");
+ results.push("Desktop: drag rotate, wheel zoom, right pan, exact reset, paused interaction");
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  // Mobile uses real Chromium touch events, not synthetic mouse aliases.
  const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1,reducedMotion:"reduce"});

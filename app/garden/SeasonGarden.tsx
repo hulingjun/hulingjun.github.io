@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import {NEW_NOTE} from "../shared/archive";
 import {SEASONS,SEASON_DURATION_SECONDS,sampleSeason} from "./seasons.mjs";
 import "./garden.css";
 const STYLES=[{id:"real",name:"写实",description:"自然光 · 真实纹理"},{id:"anime",name:"动漫",description:"赛璐璐 · 明快色层"},{id:"ink",name:"水墨",description:"淡墨远山 · 宣纸留白"}];
@@ -38,7 +39,7 @@ export default function SeasonGarden(){
    element.appendChild(canvas);
    const camera=new T.PerspectiveCamera(40,1,.2,250);
    world=model.buildGarden(low,assets);
-   orbit=new OrbitControls(camera,canvas);orbit.enableDamping=true;orbit.dampingFactor=.1;
+   orbit=new OrbitControls(camera,canvas);orbit.enableDamping=!control.current.paused;orbit.dampingFactor=.16;
    orbit.rotateSpeed=.55;orbit.zoomSpeed=.75;orbit.panSpeed=.55;orbit.screenSpacePanning=false;
    orbit.minDistance=7;orbit.maxDistance=38;orbit.minPolarAngle=.25;orbit.maxPolarAngle=Math.PI*.485;
    orbit.cursor.set(0,2.4,0);orbit.maxTargetRadius=4;orbit.target.copy(orbit.cursor);
@@ -66,6 +67,9 @@ export default function SeasonGarden(){
      if(world.style!==c.style){model.setGardenStyle(world,c.style);presentation.setStyle(c.style);}
      if(c.reset!==previousReset){previousReset=c.reset;home();}
     }
+    orbit.enableDamping=!c.paused&&!reduce.matches;
+    renderer.shadowMap.autoUpdate=!c.paused;
+    if(dirty)renderer.shadowMap.needsUpdate=true;
     const changed=orbit.update();
     if(changed)dirty=true;
     if(dirty||(!c.paused&&now-lastRender>(low?33:24))){
@@ -107,7 +111,7 @@ export default function SeasonGarden(){
  function change(values:Partial<typeof control.current>){Object.assign(control.current,values);control.current.revision++;host.current?.dispatchEvent(new Event("garden-control"));}
  function select(i:number){const elapsed=i*SEASON_DURATION_SECONDS;setSeason(sampleSeason(elapsed));setAutomatic(false);change({elapsed,automatic:false});}
  function chooseStyle(id:string){setStyle(id);change({style:id});}
- return <section className={"season-garden garden-"+style} aria-label="四季成长花园" data-status={status}>
+ return <><section className={"season-garden garden-"+style} aria-label="四季成长花园" data-status={status}>
   <div className="garden-canvas" ref={host}/>
   <div className="garden-vignette" aria-hidden="true"/>
   <header className="garden-heading"><p>THE ART OF GROWING</p><h1>一起生长，穿过四季。</h1><span>我的思考，她的世界。</span></header>
@@ -123,5 +127,7 @@ export default function SeasonGarden(){
    </div>
    <div className="garden-footnote"><span>两棵树，两段持续生长的人生。</span><a href="/garden-assets/credits.json" target="_blank" rel="noreferrer">材质来源 ↗</a></div>
   </div>
- </section>;
+ </section>
+ <div className="garden-record-actions"><a className="a-button primary" href={NEW_NOTE}>＋ 记录此刻</a><a className="a-button" href="/art/">走进她的画展 ↗</a><a className="garden-timeline-link" href="#timeline">查看成长记录 ↓</a></div>
+ </>;
 }
