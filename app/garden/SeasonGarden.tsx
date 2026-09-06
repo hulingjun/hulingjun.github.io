@@ -69,7 +69,7 @@ export default function SeasonGarden(){
     renderer.shadowMap.autoUpdate=false;
     const changed=orbit.update();
     if(changed)dirty=true;
-    if((dirty||(!c.paused&&now-lastRender>(low?33:24)))&&presentation.ready()){
+    if(dirty||(!c.paused&&now-lastRender>(low?33:24))){
      const sampled=sampleSeason(c.elapsed);
      if(model.updateGarden(world,sampled,time))renderer.shadowMap.needsUpdate=true;
      presentation.render();
