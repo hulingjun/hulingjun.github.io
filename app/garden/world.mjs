@@ -38,7 +38,7 @@ export function geometryForBranch(points,startRadius,endRadius,seed=19){
    const flare=startRadius>.2?.25*Math.exp(-t*18):0;
    const v=p.clone().addScaledVector(n,radius*(1+irregular*.22+fine*.07+flare));
    pos.push(v.x,v.y,v.z);
-   const warp=(noise3(Math.cos(angle)+phase,t*1.7,Math.sin(angle))-.5)*.075;
+   const warp=(noise3(Math.cos(angle)+phase,t*1.7,Math.sin(angle))-.5)*Math.min(.04,uSpan*.025);
    uv.push(uOffset+j/radial*uSpan+warp,vOffset+t*length/metersPerTile);
    const shade=.78+noise3(v.x*.8+phase,v.y*.55,v.z*.8)*.26;
    colors.push(shade,shade*.985,shade*.96);

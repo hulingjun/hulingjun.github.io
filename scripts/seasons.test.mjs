@@ -79,3 +79,13 @@ test("bark grain has independent patches, metre-scale length and closed smooth s
  for(let i=0;i<lp.count;i++)if(uv.getY(i)===0){assert.ok(Math.abs(lp.getY(i))<1e-8);assert.ok(Math.abs(lp.getZ(i))<1e-8);}
  a.dispose();b.dispose();leaf.dispose();
 });
+
+test("fine twig UVs never fold or mirror their normal map",()=>{
+ const points=[new Vector3(0,0,0),new Vector3(0,.5,0),new Vector3(.1,1,0)];
+ for(const seed of [19,25,101,902]){
+  const g=geometryForBranch(points,.008,.002,seed),uv=g.attributes.uv,stride=7;
+  for(let i=0;i<uv.count;i+=stride)for(let j=1;j<stride;j++)assert.ok(uv.getX(i+j)>uv.getX(i+j-1),"Circumferential UV must be monotone");
+  for(let i=stride;i<uv.count;i++)assert.ok(uv.getY(i)>uv.getY(i-stride),"Longitudinal grain must follow curve length");
+  g.dispose();
+ }
+});
