@@ -70,6 +70,7 @@ test("bark grain has independent patches, metre-scale length and closed smooth s
  assert.notEqual(a.userData.uOffset,b.userData.uOffset);
  assert.notEqual(a.userData.vOffset,b.userData.vOffset);
  assert.ok(a.userData.metersPerTile>=1.9);
+ assert.equal(a.userData.uSpan,Math.round(a.userData.uSpan),"Visible bark closes at a whole texture wrap");
  const p=a.attributes.position,n=a.attributes.normal,stride=21;
  for(let i=0;i<p.count;i+=stride){
   assert.ok(new Vector3().fromBufferAttribute(p,i).distanceTo(new Vector3().fromBufferAttribute(p,i+20))<1e-6);

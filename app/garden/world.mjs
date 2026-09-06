@@ -27,7 +27,9 @@ export function geometryForBranch(points,startRadius,endRadius,seed=19){
  const uOffset=rng()*13,vOffset=rng()*17,metersPerTile=1.9+rng()*.65,phase=rng()*100;
  // Each limb receives a different patch, at approximately world-size grain scale.
  // Fine twigs sample a small part of the same map instead of wrapping a trunk texture.
- const uSpan=TAU*startRadius/metersPerTile;
+ const physicalSpan=TAU*startRadius/metersPerTile;
+ // Whole wraps close the visible trunk/limb seam; tiny twigs keep cropped grain.
+ const uSpan=startRadius>.045?Math.max(1,Math.round(physicalSpan)):physicalSpan;
  for(let i=0;i<=steps;i++){
   const t=i/steps,p=curve.getPointAt(t);
   const radius=T.MathUtils.lerp(startRadius,endRadius,Math.pow(t,.83));
