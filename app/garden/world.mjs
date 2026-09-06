@@ -1,3 +1,4 @@
+import {batchInstances,syncBatches} from "./instance-batches.mjs";
 import * as T from "three";
 import {HDRLoader} from "three/addons/loaders/HDRLoader.js";
 import {Sky} from "three/addons/objects/Sky.js";
@@ -226,6 +227,14 @@ export function buildGarden(low=false,assets={}){
    dummy.scale.set(.0027,length+.004,.0027);dummy.updateMatrix();petioles.setMatrixAt(i,dummy.matrix);
   });
   group.add(petioles);
+  // Full-size bounds are computed once and cover every later seasonal size.
+  const baseMatrices=new Float64Array(seeds.length*16);
+  seeds.forEach((s,i)=>{
+   dummy.position.copy(s.petioleEnd);dummy.quaternion.copy(s.quaternion);dummy.scale.setScalar(s.scale);dummy.updateMatrix();
+   leaves.setMatrixAt(i,dummy.matrix);dummy.matrix.toArray(baseMatrices,i*16);leaves.setColorAt(i,color.set("#ffffff"));
+  });
+  const leafBatches=batchInstances(leaves,1.7,.12),petioleBatches=batchInstances(petioles,1.7);
+  group.remove(leaves,petioles);group.add(leafBatches.group,petioleBatches.group);
   const snow=new T.Mesh(bark.geometry,new T.MeshStandardMaterial({color:"#e7edf0",roughness:1,transparent:true,opacity:0,polygonOffset:true,polygonOffsetFactor:-1}));
   snow.material.onBeforeCompile=shader=>{
    shader.vertexShader="varying float gardenUp;\n"+shader.vertexShader;
@@ -235,7 +244,7 @@ export function buildGarden(low=false,assets={}){
   };
   snow.material.depthWrite=false;
   snow.scale.setScalar(1.018);group.add(snow);
-  trees.push({group,bark,leaves,petioles,seeds,shoots,snow});
+  trees.push({group,bark,leaves,petioles,seeds,shoots,snow,baseMatrices,leafBatches,petioleBatches});
  }
  // Grass blades form the clearing, not a floating pedestal.
  const grassGeo=new T.PlaneGeometry(.045,.4,1,4);grassGeo.translate(0,.2,0);
@@ -248,17 +257,17 @@ export function buildGarden(low=false,assets={}){
   const az=random()*TAU,r=Math.sqrt(random())*12,x=Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z),z);dummy.rotation.set((random()-.5)*.4,random()*TAU, (random()-.5)*.4);dummy.scale.setScalar(.3+random()*.9);dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix);
  }
- scene.add(grass);
+ const grassBatches=batchInstances(grass,3);scene.add(grassBatches.group);
  const count=low?180:440,seeds=[],positions=new Float32Array(count*3),rainPositions=new Float32Array(count*6);
  for(let i=0;i<count;i++)seeds.push({x:(random()-.5)*24,y:random()*13,z:(random()-.5)*18,phase:random()*TAU,speed:.5+random()});
- const particlesGeo=new T.BufferGeometry();particlesGeo.setAttribute("position",new T.BufferAttribute(positions,3));
+ const particlesGeo=new T.BufferGeometry();particlesGeo.setAttribute("position",new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));
  const particleMat=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{tint:{value:new T.Color("#ffe4d3")},size:{value:6},alpha:{value:.5}},vertexShader:`
   uniform float size;void main(){vec4 p=modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(size*18./-p.z,1.,12.);gl_Position=projectionMatrix*p;}
  `,fragmentShader:`
   uniform vec3 tint;uniform float alpha;void main(){float d=length(gl_PointCoord-.5);float a=1.-smoothstep(.12,.5,d);gl_FragColor=vec4(tint,a*alpha);}
  `});
  const particles=new T.Points(particlesGeo,particleMat);particles.frustumCulled=false;scene.add(particles);
- const rainGeo=new T.BufferGeometry();rainGeo.setAttribute("position",new T.BufferAttribute(rainPositions,3));
+ const rainGeo=new T.BufferGeometry();rainGeo.setAttribute("position",new T.BufferAttribute(rainPositions,3).setUsage(T.DynamicDrawUsage));
  const rainMat=new T.LineBasicMaterial({color:"#b3d3df",transparent:true,opacity:0,depthWrite:false});
  const rain=new T.LineSegments(rainGeo,rainMat);rain.frustumCulled=false;scene.add(rain);
  const falling=new T.InstancedMesh(leafGeo,surfaces.leaf,low?14:26);falling.frustumCulled=false;scene.add(falling);
@@ -267,39 +276,43 @@ export function buildGarden(low=false,assets={}){
   const az=random()*TAU,r=Math.sqrt(random())*3.1,x=(i%2===0?-2.7:2.8)+Math.cos(az)*r,z=Math.sin(az)*r;
   dummy.position.set(x,terrainY(x,z)+.025,z);dummy.rotation.set(-Math.PI/2,0,random()*TAU);dummy.scale.setScalar(.45+random()*.65);dummy.updateMatrix();fallen.setMatrixAt(i,dummy.matrix);color.set("#be6c29").lerp(new T.Color("#ddae54"),random());fallen.setColorAt(i,color);
  }
- return {scene,assets,wind,snowWeight,surfaces,trees,ground,grass,mountains,sky,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,seasonKey:"",low};
+ return {scene,assets,wind,snowWeight,surfaces,trees,ground,grass,grassBatches,mountains,sky,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,seasonKey:"",lastTime:NaN,low,scratch:{sun:new T.Vector3(),origin:new T.Vector3(),dummy:new T.Object3D(),color:new T.Color()}};
 }
 export function updateGarden(w,state,time){
  const {from,to,mix}=state,a=palette[from],b=palette[to];
+ const key=[from,to,mix.toFixed(3)].join(":");
+ if(w.lastTime===time&&w.lastFrom===from&&w.lastTo===to&&w.lastMix===mix)return false;
+ w.lastTime=time;w.lastFrom=from;w.lastTo=to;w.lastMix=mix;
  const blend=key=>new T.Color(a[key]).lerp(new T.Color(b[key]),mix);
  const weight=i=>(from===i?1-mix:0)+(to===i?mix:0);
  const spring=weight(0),summer=weight(1),autumn=weight(2),winter=weight(3);
  w.wind.value=time;w.snowWeight.value=winter;
- const sunshine=new T.Vector3(.32,.25+summer*.035-winter*.07+Math.sin(time*.055)*.018,-.92).normalize();
+ const sunshine=w.scratch.sun.set(.32,.25+summer*.035-winter*.07+Math.sin(time*.055)*.018,-.92).normalize();
  w.sky.material.uniforms.sunPosition.value.copy(sunshine);w.light.position.copy(sunshine).multiplyScalar(25);
- const key=[from,to,mix.toFixed(3)].join(":");
  if(w.seasonKey!==key){
   w.seasonKey=key;w.scene.background.copy(blend("sky"));w.scene.fog.color.copy(blend("fog"));
   w.scene.fog.near=28;w.scene.fog.far=110;
   w.ground.material.color.copy(blend("ground"));
   w.grass.material.color.copy(blend("ground")).multiplyScalar(.72);
-  w.grass.visible=winter<.95;
+  w.grass.visible=winter<.95;w.grassBatches.group.visible=w.grass.visible;
   w.light.color.copy(blend("sun"));
   w.sky.material.uniforms.rayleigh.value=1.4+autumn*.7-winter*.4;
   w.sky.material.uniforms.turbidity.value=3+spring*2+winter*4;
   w.surfaces.bark.color.set("#d0c2ae");
-  const c1=blend("leaf"),c2=blend("tip"),dummy=new T.Object3D(),color=new T.Color();
+  const c1=blend("leaf"),c2=blend("tip");
   for(const tree of w.trees){
    tree.snow.material.opacity=winter*.9;tree.snow.visible=winter>.01;tree.petioles.visible=winter<.99;
+   tree.petioleBatches.group.visible=tree.petioles.visible;
+   tree.leafBatches.group.visible=winter<1;
+   const matrices=tree.leaves.instanceMatrix.array,colors=tree.leaves.instanceColor.array,base=tree.baseMatrices;
    for(let i=0;i<tree.seeds.length;i++){
-    const s=tree.seeds[i];
-    // Individual leaf shedding exposes the full twig structure in winter.
-    const density=Math.max(0,1-winter-autumn*s.drop*.58);
-    const size=s.scale*density*(.82+summer*.18);
-    dummy.position.copy(s.petioleEnd);dummy.quaternion.copy(s.quaternion);dummy.scale.setScalar(size);dummy.updateMatrix();tree.leaves.setMatrixAt(i,dummy.matrix);
-    color.copy(c1).lerp(c2,s.tone);tree.leaves.setColorAt(i,color);
+    const s=tree.seeds[i],growth=Math.max(0,1-winter-autumn*s.drop*.58)*(.82+summer*.18),m=i*16,c=i*3;
+    // Same basal transform as before, without rebuilding 7,920 quaternions.
+    for(let column=0;column<3;column++)for(let row=0;row<3;row++){const j=column*4+row;matrices[m+j]=base[m+j]*growth;}
+    colors[c]=c1.r+(c2.r-c1.r)*s.tone;colors[c+1]=c1.g+(c2.g-c1.g)*s.tone;colors[c+2]=c1.b+(c2.b-c1.b)*s.tone;
    }
    tree.leaves.instanceMatrix.needsUpdate=true;tree.leaves.instanceColor.needsUpdate=true;
+   syncBatches(tree.leafBatches);
   }
   w.mountains.forEach((m,i)=>m.material.color.set("#728b78").lerp(w.scene.fog.color,.2+i*.18));
   w.falling.visible=autumn>.01;w.fallen.visible=autumn>.01;
@@ -316,13 +329,16 @@ export function updateGarden(w,state,time){
   const y=((s.y-time*8*s.speed)%13+13)%13;
   w.rainPositions[k]=s.x;w.rainPositions[k+1]=y;w.rainPositions[k+2]=s.z;w.rainPositions[k+3]=s.x+.07;w.rainPositions[k+4]=y+.35;w.rainPositions[k+5]=s.z;
  }
- w.particles.geometry.attributes.position.needsUpdate=true;w.rain.geometry.attributes.position.needsUpdate=true;
- const dummy=new T.Object3D(),color=new T.Color();
+ w.particles.visible=w.particleMat.uniforms.alpha.value>0;w.rain.visible=w.rainMat.opacity>0;
+ if(w.particles.visible)w.particles.geometry.attributes.position.needsUpdate=true;if(w.rain.visible)w.rain.geometry.attributes.position.needsUpdate=true;
+ const {dummy,color,origin}=w.scratch;
+ if(w.falling.visible){
+ for(const tree of w.trees)tree.group.updateWorldMatrix(true,false);
  for(let i=0;i<w.falling.count;i++){
   const tree=w.trees[i%2],s=tree.seeds[(i*137)%tree.seeds.length];
   const speed=.12+s.drop*.055,life=((time*speed+s.tone)%1+1)%1;
-  tree.group.updateMatrixWorld();
-  const origin=s.petioleEnd.clone().applyMatrix4(tree.group.matrixWorld),duration=1/speed,age=life*duration;
+  origin.copy(s.petioleEnd).applyMatrix4(tree.group.matrixWorld);
+  const duration=1/speed,age=life*duration;
   const floor=terrainY(origin.x,origin.z)+.03;
   // Shed from actual canopy attachments, then descend; no spring leaf confetti.
   dummy.position.set(origin.x+Math.sin(age*1.2+s.tone*TAU)*life*.65,Math.max(floor,origin.y-age*age*.16),origin.z+Math.sin(age*.7)*life*.42);
@@ -332,10 +348,13 @@ export function updateGarden(w,state,time){
   color.set("#c68832");w.falling.setColorAt(i,color);
  }
  w.falling.instanceMatrix.needsUpdate=true;w.falling.instanceColor.needsUpdate=true;
+ }
+ return true;
 }
 export function disposeGarden(w){
  const geometries=new Set(),materials=new Set(),textures=new Set(Object.values(w.assets));
  w.scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});
  for(const m of Object.values(w.surfaces))materials.add(m);
+ for(const tree of w.trees){materials.add(tree.petioles.material);geometries.add(tree.petioles.geometry);}
  materials.add(w.leafDepth);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
 }

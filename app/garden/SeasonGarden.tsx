@@ -62,16 +62,16 @@ export default function SeasonGarden(){
     const c=control.current,dt=last?Math.min((now-last)/1000,.1):0;last=now;
     if(!c.paused){time+=dt;if(c.automatic)c.elapsed+=dt;}
     if(c.revision!==previousRevision){
-     previousRevision=c.revision;dirty=true;renderer.shadowMap.needsUpdate=true;
+     previousRevision=c.revision;dirty=true;
      if(c.reset!==previousReset){previousReset=c.reset;home();}
     }
     orbit.enableDamping=!c.paused&&!reduce.matches;
-    renderer.shadowMap.autoUpdate=!c.paused;
+    renderer.shadowMap.autoUpdate=false;
     const changed=orbit.update();
     if(changed)dirty=true;
-    if(dirty||(!c.paused&&now-lastRender>(low?33:24))){
+    if((dirty||(!c.paused&&now-lastRender>(low?33:24)))&&presentation.ready()){
      const sampled=sampleSeason(c.elapsed);
-     model.updateGarden(world,sampled,time);
+     if(model.updateGarden(world,sampled,time))renderer.shadowMap.needsUpdate=true;
      presentation.render();
      const labelKey=sampled.from+":"+sampled.to;
      if(labelKey!==previousLabel){previousLabel=labelKey;setSeason(sampled);}

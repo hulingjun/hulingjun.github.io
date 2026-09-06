@@ -90,3 +90,32 @@ test("fine twig UVs never fold or mirror their normal map",()=>{
   g.dispose();
  }
 });
+
+test("performance batches retain every full-detail instance and conservative bounds",()=>{
+ const world=buildGarden(false);
+ assert.equal(world.trees.reduce((sum,t)=>sum+t.leaves.count,0),7920);
+ assert.equal(world.grass.count,10000);assert.deepEqual(world.light.shadow.mapSize.toArray(),[2048,2048]);
+ for(const batch of [...world.trees.flatMap(t=>[t.leafBatches,t.petioleBatches]),world.grassBatches]){
+  const seen=new Set(),matrix=new Matrix4();
+  for(const {mesh,indices} of batch.batches){
+   assert.equal(mesh.geometry,batch.source.geometry);assert.equal(mesh.material,batch.source.material);
+   assert.equal(mesh.castShadow,batch.source.castShadow);assert.equal(mesh.receiveShadow,batch.source.receiveShadow);
+   assert.equal(mesh.frustumCulled,true);
+   for(let i=0;i<indices.length;i++){
+    assert.equal(seen.has(indices[i]),false);seen.add(indices[i]);mesh.getMatrixAt(i,matrix);
+    const center=new Vector3().setFromMatrixPosition(matrix);
+    assert.ok(mesh.boundingSphere.containsPoint(center),"Maximum-size attachment falls within batch bounds");
+   }
+  }
+  assert.equal(seen.size,batch.source.count);
+ }
+ updateGarden(world,sampleSeason(22),12);
+ const versions=()=>world.trees.flatMap(t=>t.leafBatches.batches.map(b=>b.mesh.instanceMatrix.version)).concat(world.particles.geometry.attributes.position.version,world.rain.geometry.attributes.position.version,world.falling.instanceMatrix.version);
+ const before=versions();
+ for(let i=0;i<100;i++)assert.equal(updateGarden(world,sampleSeason(22),12),false);
+ assert.deepEqual(versions(),before,"Camera-only updates make no buffer uploads");
+ updateGarden(world,sampleSeason(66),13);for(const t of world.trees)assert.equal(t.leafBatches.group.visible,false);
+ assert.equal(world.rain.visible,false);
+ updateGarden(world,sampleSeason(0),14);assert.equal(world.particles.visible,false);
+ disposeGarden(world);
+});
