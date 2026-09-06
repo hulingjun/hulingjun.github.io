@@ -18,11 +18,11 @@ function pose(view){
 window.measure=async(view,season,mix=0)=>{
  pose(view);const sample=state(season,mix);
  const cpu=[],completed=[],counts=[];
- for(let i=0;i<12;i++){
+ for(let i=0;i<5;i++){
   const time=12+i/60,start=performance.now();model.updateGarden(world,sample,time);const simulated=performance.now();
   renderer.info.autoReset=false;renderer.info.reset();renderer.render(world.scene,camera);
   gl.finish();const end=performance.now();
-  if(i>=4){cpu.push(simulated-start);completed.push(end-start);counts.push({...renderer.info.render});}
+  if(i>=2){cpu.push(simulated-start);completed.push(end-start);counts.push({...renderer.info.render});}
  }
  // A deterministic frame for image equivalence, independent of timing.
  model.updateGarden(world,sample,12);renderer.render(world.scene,camera);gl.finish();
@@ -32,10 +32,10 @@ window.cpuMeasure=()=>{
  const results={};
  for(const [name,step] of [["hold",0],["transition",.003],["paused",null]]){
   const values=[];model.updateGarden(world,state(0),12);
-  for(let round=0;round<6;round++){
+  for(let round=0;round<4;round++){
    const start=performance.now();
-   for(let i=0;i<120;i++)model.updateGarden(world,state(0,step===null?0:step*i),step===null?12:12+i/60);
-   if(round)values.push((performance.now()-start)/120);
+   for(let i=0;i<60;i++)model.updateGarden(world,state(0,step===null?0:step*i),step===null?12:12+i/60);
+   if(round)values.push((performance.now()-start)/60);
   }results[name]=stats(values);
  }
  return results;

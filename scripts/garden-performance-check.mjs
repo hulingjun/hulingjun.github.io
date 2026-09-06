@@ -21,8 +21,11 @@ try{
   await page.goto("http://127.0.0.1:4174/scripts/garden-perf.html?model="+encodeURIComponent(module),{waitUntil:"networkidle"});
   await page.waitForFunction(()=>window.ready,{},{timeout:120000});
   const inventory=await page.evaluate(()=>window.inventory()),cpu=await page.evaluate(()=>window.cpuMeasure()),frames=[];
+  console.log("Loaded "+name,JSON.stringify({inventory,cpu}));
   for(const [label,view,season,mix] of [["summer-home","overview",1,0],["summer-detail","detail",1,0],["summer-edge","edge",1,0],["winter-detail","detail",3,0],["transition-detail","detail",0,.5]]){
    frames.push({label,...await page.evaluate(args=>window.measure(...args),[view,season,mix])});
+   console.log(name+" "+label,JSON.stringify(frames.at(-1)));
+   await writeFile(join(output,name+"-progress.json"),JSON.stringify({inventory,cpu,frames},null,2));
    await page.screenshot({path:join(output,name+"-"+label+".png"),timeout:90000});
   }
   results[name]={inventory,cpu,frames};await context.close();
