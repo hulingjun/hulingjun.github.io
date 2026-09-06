@@ -45,7 +45,7 @@ for(let y=0;y<rect.height;y++)for(let x=0;x<rect.width;x++)if(alpha[y*rect.width
 }
 if(left>=right||top>=bottom)throw Error("Leaf alpha crop is empty");
 const stemPixels=[];for(let x=left;x<=right;x++)if(alpha[bottom*rect.width+x]>=108)stemPixels.push(x);
-const stemX=Math.round(stemPixels.reduce((sum,x)=>sum+x,0)/stemPixels.length);
+const stemX=stemPixels[Math.floor(stemPixels.length/2)];
 const half=Math.max(stemX-left,right-stemX)+2,width=half*2+1,height=bottom-top+3;
 const centeredAlpha=Buffer.alloc(width*height);
 const rgba=await sharp(color).extract(rect).modulate({saturation:0,brightness:1.65}).raw().toBuffer({resolveWithObject:true});
