@@ -1,6 +1,20 @@
-export const SEASONS=[
- {name:"春",en:"SPRING",note:"新芽初醒 · 花瓣与微雨",sky:"#091b25",leaf:"#efacc7",second:"#99e6b7",ground:"#163b32",sun:"#ffd8ac",rain:.25,snow:0,foliage:1},
- {name:"夏",en:"SUMMER",note:"枝叶繁盛 · 日光与雨露",sky:"#08212b",leaf:"#43b784",second:"#a3ec8c",ground:"#124c36",sun:"#fff0a6",rain:.75,snow:0,foliage:1.15},
- {name:"秋",en:"AUTUMN",note:"风过树梢 · 金色的告别",sky:"#251724",leaf:"#f88a3b",second:"#f7c35b",ground:"#443321",sun:"#ffb66f",rain:0,snow:0,foliage:.78},
- {name:"冬",en:"WINTER",note:"雪落无声 · 等待下一次生长",sky:"#101e34",leaf:"#d7e7f5",second:"#c3dbf4",ground:"#78929f",sun:"#b6d4ff",rain:0,snow:1,foliage:.05}
-];
+export const SEASON_HOLD_SECONDS=18;
+export const SEASON_TRANSITION_SECONDS=4;
+export const SEASON_DURATION_SECONDS=22;
+export const SEASON_CYCLE_SECONDS=88;
+export const SEASONS=Object.freeze([
+ Object.freeze({id:"spring",name:"春",en:"SPRING",note:"春雨润新芽"}),
+ Object.freeze({id:"summer",name:"夏",en:"SUMMER",note:"日光穿过繁叶"}),
+ Object.freeze({id:"autumn",name:"秋",en:"AUTUMN",note:"风起，金叶飘落"}),
+ Object.freeze({id:"winter",name:"冬",en:"WINTER",note:"枝影映雪，静待新生"}),
+]);
+export function sampleSeason(elapsedSeconds){
+ if(typeof elapsedSeconds!=="number"||!Number.isFinite(elapsedSeconds))throw new TypeError("elapsedSeconds must be a finite number");
+ const remainder=elapsedSeconds%SEASON_CYCLE_SECONDS;
+ const wrapped=remainder<0?remainder+SEASON_CYCLE_SECONDS:remainder;
+ const time=wrapped>=SEASON_CYCLE_SECONDS||Object.is(wrapped,-0)?0:wrapped;
+ const from=Math.floor(time/SEASON_DURATION_SECONDS),local=time-from*SEASON_DURATION_SECONDS;
+ const transitioning=local>=SEASON_HOLD_SECONDS,to=transitioning?(from+1)%4:from;
+ const progress=transitioning?Math.min(1,(local-SEASON_HOLD_SECONDS)/SEASON_TRANSITION_SECONDS):0;
+ return {from,to,mix:progress*progress*(3-2*progress),transitioning,label:transitioning?SEASONS[from].name+" → "+SEASONS[to].name:SEASONS[from].name};
+}

@@ -44,7 +44,7 @@ jobs:
       - name: Install isolated image processing tools
         run: npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4
       - name: Validate archive security and image processing
-        run: node --test scripts/archive.test.mjs
+        run: node --test scripts/archive.test.mjs scripts/seasons.test.mjs
         env:
           GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
       - name: Prepare owner artwork and growth records
@@ -53,6 +53,10 @@ jobs:
           node scripts/sync-records.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+      - name: Prepare verified garden assets
+        run: node scripts/prepare-garden-assets.mjs
+        env:
           GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
       - name: Build website
         run: npm run build

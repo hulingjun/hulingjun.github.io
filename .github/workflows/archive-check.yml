@@ -19,6 +19,10 @@ jobs:
       - run: npm install
       - name: Install isolated image processing tools
         run: npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4
+      - name: Prepare verified garden assets
+        run: node scripts/prepare-garden-assets.mjs
+        env:
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
       - name: Validate records, permissions and image processing
         run: node --test scripts/archive.test.mjs scripts/seasons.test.mjs
         env:
@@ -40,3 +44,20 @@ jobs:
           test -s github-dist/3d-alpha/index.html
           test -s github-dist/art-data/manifest.json
           test -s github-dist/records/index.json
+      - name: Install isolated cloud browser
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          npm install --prefix "$RUNNER_TEMP/gallery-tools" --no-package-lock --no-save sharp@0.35.4 playwright@1.63.0
+          "$RUNNER_TEMP/gallery-tools/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check all styles and camera interactions in cloud Chromium
+        run: node scripts/garden-browser-check.mjs
+        env:
+          GALLERY_TOOLS_DIR: ${{ runner.temp }}/gallery-tools
+      - name: Save visual review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: garden-visual-review
+          path: garden-qa
+          retention-days: 7
