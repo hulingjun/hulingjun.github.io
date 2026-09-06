@@ -1,127 +1,277 @@
 import * as T from "three";
-import {SEASONS} from "./seasons.mjs";
-export {SEASONS} from "./seasons.mjs";
-export function seeded(seed=19){let s=seed;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
-export function phaseAt(time){return ((time/24)%4+4)%4}
-const glowVertex="varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}";
-const glowFragment="varying vec2 vUv;uniform vec3 tint;uniform float strength;void main(){float d=length(vUv-.5)*2.;float a=pow(max(0.,1.-d),3.0)*strength;gl_FragColor=vec4(tint,a);}";
-export function buildGarden(low=false){
- const scene=new T.Scene();scene.background=new T.Color(SEASONS[0].sky);scene.fog=new T.FogExp2(SEASONS[0].sky,.035);
- const hemi=new T.HemisphereLight(0xb5e7ff,0x172918,2.2);scene.add(hemi);
- const light=new T.DirectionalLight(0xffe1b0,3);light.position.set(-3,7,2);scene.add(light);
- const rim=new T.DirectionalLight(0x6ccfff,2.5);rim.position.set(4,3,-4);scene.add(rim);
- const groundMat=new T.MeshStandardMaterial({color:SEASONS[0].ground,roughness:.9,flatShading:true});
- const island=new T.Mesh(new T.SphereGeometry(5,48,16),groundMat);island.scale.set(1,.105,.56);island.position.y=-1.43;scene.add(island);
- const rock=new T.Mesh(new T.IcosahedronGeometry(4.9,1),new T.MeshStandardMaterial({color:0x142b32,metalness:.55,roughness:.55,flatShading:true}));
- rock.scale.set(1,.32,.56);rock.position.y=-2.22;scene.add(rock);
- const orbit=new T.Group();scene.add(orbit);
- for(let i=0;i<3;i++){
-  const ring=new T.Mesh(new T.TorusGeometry(5.3+i*.48,.007,4,160),new T.MeshBasicMaterial({color:i===1?0x72b7ed:0x78f4db,transparent:true,opacity:.22-i*.04}));
-  ring.rotation.x=Math.PI/2-.05*i;ring.rotation.y=.06*i;ring.position.y=-1.62-i*.27;orbit.add(ring);
+import {Sky} from "three/addons/objects/Sky.js";
+import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
+export function seeded(seed=19){return()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};}
+const TAU=Math.PI*2;
+const up=new T.Vector3(0,1,0);
+const palettes={
+ real:[
+  {sky:"#b3cdc2",fog:"#b8cbb4",leaf:"#a0b958",tip:"#d3dd9b",ground:"#89946c",sun:"#ffebcb"},
+  {sky:"#a8d4e0",fog:"#b1cebf",leaf:"#5d9141",tip:"#a4bd5a",ground:"#668747",sun:"#fff5da"},
+  {sky:"#e1bf9c",fog:"#c3b199",leaf:"#cb651c",tip:"#eabb41",ground:"#a58f58",sun:"#ffd39a"},
+  {sky:"#c3d3df",fog:"#d5dfe2",leaf:"#bbc9cb",tip:"#e3e9e6",ground:"#dee5e4",sun:"#e3edf8"}
+ ],
+ anime:[
+  {sky:"#a8deed",fog:"#cce8db",leaf:"#edacca",tip:"#ffe5eb",ground:"#98bf76",sun:"#ffedc5"},
+  {sky:"#7cceeb",fog:"#b9e0c5",leaf:"#55a45d",tip:"#b9db67",ground:"#74ad69",sun:"#fff0a4"},
+  {sky:"#eac49a",fog:"#e3c5a9",leaf:"#e98b42",tip:"#ffce66",ground:"#c5a769",sun:"#ffce88"},
+  {sky:"#b8d5ed",fog:"#d4e4ee",leaf:"#b6c6df",tip:"#ffffff",ground:"#e7eef3",sun:"#f5efeb"}
+ ],
+ ink:[
+  {sky:"#eee9db",fog:"#e8e4d8",leaf:"#687b66",tip:"#a9b59b",ground:"#cbcebc",sun:"#b7624e"},
+  {sky:"#eee9db",fog:"#e3e3d5",leaf:"#405c52",tip:"#8b9c7c",ground:"#b8c4b2",sun:"#bb614e"},
+  {sky:"#eee9db",fog:"#e5ded0",leaf:"#856447",tip:"#b99a67",ground:"#c9baa0",sun:"#aa5949"},
+  {sky:"#eee9df",fog:"#e8e7df",leaf:"#5c6562",tip:"#aab1ac",ground:"#e3e4dc",sun:"#a75b50"}
+ ]
+};
+function terrainY(x,z){return -.25+.22*Math.sin(x*.29)*Math.cos(z*.31)+.13*Math.sin(x*.71+z*.24);}
+function geometryForBranch(points,startRadius,endRadius){
+ const curve=new T.CatmullRomCurve3(points),steps=points.length*3,radial=8;
+ const frames=curve.computeFrenetFrames(steps,false),pos=[],normal=[],uv=[],indices=[];
+ for(let i=0;i<=steps;i++){
+  const p=curve.getPointAt(i/steps),radius=T.MathUtils.lerp(startRadius,endRadius,i/steps);
+  for(let j=0;j<=radial;j++){
+   const angle=j/radial*TAU,n=frames.normals[i].clone().multiplyScalar(Math.cos(angle)).addScaledVector(frames.binormals[i],Math.sin(angle));
+   const v=p.clone().addScaledVector(n,radius*(1+.065*Math.sin(j*4+i*.7)));
+   pos.push(v.x,v.y,v.z);normal.push(n.x,n.y,n.z);uv.push(j/radial,i/steps*points[0].distanceTo(points.at(-1))*1.3);
+   if(i<steps&&j<radial){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,b,a+1,b,b+1,a+1);}
+  }
  }
- const trees=[];const rng=seeded();const dummy=new T.Object3D();
- const leafGeo=new T.SphereGeometry(1,5,3); // Faceted, elongated 3D leaves.
+ const g=new T.BufferGeometry();g.setAttribute("position",new T.Float32BufferAttribute(pos,3));g.setAttribute("normal",new T.Float32BufferAttribute(normal,3));g.setAttribute("uv",new T.Float32BufferAttribute(uv,2));g.setIndex(indices);return g;
+}
+function leafGeometry(){
+ const g=new T.PlaneGeometry(.3,.53,2,4),p=g.attributes.position;
+ for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,.045*Math.sin((y/.53+.5)*Math.PI)+Math.abs(x)*.2);}
+ g.computeVertexNormals();return g;
+}
+function gradient(){
+ const map=new T.DataTexture(new Uint8Array([65,130,195,255]),4,1,T.RedFormat);
+ map.minFilter=map.magFilter=T.NearestFilter;map.needsUpdate=true;return map;
+}
+function surface(kind,assets,grad){
+ const common={side:kind==="leaf"?T.DoubleSide:T.FrontSide};
+ const map=kind==="bark"?assets.bark:kind==="ground"?assets.ground:assets.leaf;
+ const real=new T.MeshStandardMaterial({...common,map:map||null,roughness:kind==="leaf"?.68:.94,metalness:0});
+ if(kind==="bark"&&assets.barkNormal){real.normalMap=assets.barkNormal;real.normalScale.set(.7,.7);}
+ if(kind==="bark"&&assets.barkRoughness)real.roughnessMap=assets.barkRoughness;
+ const toon=new T.MeshToonMaterial({...common,gradientMap:grad});
+ const ink=new T.MeshToonMaterial({...common,gradientMap:grad});
+ if(kind==="leaf"){
+  // The extracted leaf is RGBA, shared by shadow depth and all three styles.
+  for(const material of [real,toon,ink]){
+   material.map=(material===real?assets.leaf:assets.leafSilhouette)||null;material.alphaTest=.42;
+   material.forceSinglePass=true;
+  }
+ }
+ return {real,anime:toon,ink};
+}
+function windShader(material,wind){
+ material.onBeforeCompile=shader=>{
+  shader.uniforms.gardenTime=wind;
+  shader.vertexShader="uniform float gardenTime;\n"+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace("#include <begin_vertex>",`
+   #include <begin_vertex>
+   #ifdef USE_INSTANCING
+    float seed=instanceMatrix[3].x*2.7+instanceMatrix[3].z*1.3;
+    float wave=sin(gardenTime*1.7+seed)+sin(gardenTime*2.9+seed*1.8)*.35;
+    transformed.z+=wave*.035*(uv.y+.2);
+    transformed.x+=sin(gardenTime*.8+seed)*.018;
+   #endif
+  `);
+ };
+ material.customProgramCacheKey=()=>"garden-leaf-wind-v2";
+}
+export async function loadGardenAssets(){
+ const loader=new T.TextureLoader();
+ const names={bark:"bark.webp",barkNormal:"bark-normal.webp",barkRoughness:"bark-roughness.webp",ground:"ground.webp",leaf:"leaf.png",leafSilhouette:"leaf-silhouette.png"};
+ const assets={};
+ try{
+  await Promise.all(Object.entries(names).map(async([key,file])=>{
+   const texture=await loader.loadAsync("/garden-assets/"+file);assets[key]=texture;
+   if(["bark","ground","leaf"].includes(key))texture.colorSpace=T.SRGBColorSpace;
+   texture.anisotropy=4;
+   if(key!=="leaf"&&key!=="leafSilhouette"){texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(key==="ground"?55:1,key==="ground"?55:2);}
+  }));
+  return assets;
+ }catch(error){Object.values(assets).forEach(t=>t.dispose());throw error;}
+}
+export function buildGarden(low=false,assets={}){
+ const random=seeded(1337),scene=new T.Scene(),wind={value:0},grad=gradient();
+ scene.background=new T.Color("#b3cdc2");scene.fog=new T.Fog("#b8cbb4",22,75);
+ const hemi=new T.HemisphereLight("#d8e8f8","#637348",2.1);scene.add(hemi);
+ const light=new T.DirectionalLight("#ffebcb",3.1);light.position.set(-8,12,-6);light.castShadow=true;
+ light.shadow.mapSize.set(low?1024:2048,low?1024:2048);
+ Object.assign(light.shadow.camera,{left:-11,right:11,top:12,bottom:-9,near:1,far:42});
+ light.shadow.bias=-.00035;light.shadow.normalBias=.04;scene.add(light);
+ const fill=new T.DirectionalLight("#c6deef",.55);fill.position.set(6,4,8);scene.add(fill);
+ const sky=new Sky();sky.scale.setScalar(180);scene.add(sky);
+ sky.material.uniforms.turbidity.value=3.8;sky.material.uniforms.rayleigh.value=1.45;
+ sky.material.uniforms.mieCoefficient.value=.006;sky.material.uniforms.mieDirectionalG.value=.83;
+ const sunDirection=new T.Vector3(-.45,.29,-.78).normalize();sky.material.uniforms.sunPosition.value.copy(sunDirection);light.position.copy(sunDirection).multiplyScalar(25);
+ const disc=new T.Mesh(new T.SphereGeometry(1.45,32,24),new T.MeshBasicMaterial({color:"#bb614e",fog:false}));disc.position.copy(sunDirection).multiplyScalar(55);scene.add(disc);disc.visible=false;
+
+ const surfaces={bark:surface("bark",assets,grad),leaf:surface("leaf",assets,grad),ground:surface("ground",assets,grad)};
+ Object.values(surfaces.leaf).forEach(m=>windShader(m,wind));
+ const groundGeo=new T.PlaneGeometry(170,170,low?80:120,low?80:120);groundGeo.rotateX(-Math.PI/2);
+ const gp=groundGeo.attributes.position;
+ for(let i=0;i<gp.count;i++)gp.setY(i,terrainY(gp.getX(i),gp.getZ(i)));
+ groundGeo.computeVertexNormals();
+ const ground=new T.Mesh(groundGeo,surfaces.ground.real);ground.receiveShadow=true;scene.add(ground);
+ const mountains=[];
+ for(let ring=0;ring<3;ring++){
+  const geo=new T.CylinderGeometry(1,1,1,100,18,true),p=geo.attributes.position;
+  for(let i=0;i<p.count;i++){
+   const angle=Math.atan2(p.getZ(i),p.getX(i)),height=(p.getY(i)+.5);
+   const ridge=4+4*Math.pow(Math.sin(angle*3+ring*.8),2)+2*Math.sin(angle*7+ring);
+   const radius=40+ring*14;
+   p.setXYZ(i,p.getX(i)*radius,(height*ridge-1)*(1+ring*.3),p.getZ(i)*radius);
+  }
+  geo.computeVertexNormals();const mat=new T.MeshStandardMaterial({color:0x799487,roughness:1,side:T.DoubleSide});
+  const mountain=new T.Mesh(geo,mat);mountains.push(mountain);scene.add(mountain);
+ }
+ const trees=[],leafGeo=leafGeometry(),dummy=new T.Object3D(),color=new T.Color();
+ const leafDepth=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:assets.leaf||null,alphaTest:.42,side:T.DoubleSide});
+ windShader(leafDepth,wind);
  for(let treeIndex=0;treeIndex<2;treeIndex++){
-  const group=new T.Group();group.position.set(treeIndex===0?-1.95:2.1,-1.13,treeIndex===0?0:.35);const scale=treeIndex===0?1:.76;group.scale.setScalar(scale);scene.add(group);
-  const bark=new T.MeshStandardMaterial({color:0x745e66,roughness:.85,flatShading:true});
-  const tips=[];
-  function branch(start,dir,length,radius,depth){
-   const end=start.clone().addScaledVector(dir,length);
-   const mesh=new T.Mesh(new T.CylinderGeometry(radius*.62,radius,length,6),bark);
-   mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),dir);group.add(mesh);
-   if(depth===0){tips.push(end);return;}
-   const count=depth===3?3:2;
-   for(let k=0;k<count;k++){
-    const angle=rng()*Math.PI*2;
-    const spread=.5+rng()*.55;
-    const next=new T.Vector3(dir.x*.45+Math.cos(angle)*spread,.65+rng()*.65,dir.z*.45+Math.sin(angle)*spread).normalize();
-    branch(end,next,length*(.64+rng()*.12),radius*.57,depth-1);
+  const group=new T.Group();group.position.set(treeIndex===0?-2.7:2.8,terrainY(treeIndex===0?-2.7:2.8,0),treeIndex===0?0:.8);
+  group.scale.setScalar(treeIndex===0?1:.79);group.rotation.y=treeIndex*1.6;scene.add(group);
+  const branchParts=[],tips=[];
+  const trunk=[];
+  for(let i=0;i<=8;i++)trunk.push(new T.Vector3(Math.sin(i*.53)*.16,i*.65,Math.sin(i*.44)*.12));
+  branchParts.push(geometryForBranch(trunk,.3,.018));
+  function branch(start,direction,length,radius,depth){
+   const points=[start.clone()];const dir=direction.clone();
+   for(let j=1;j<=4;j++){
+    dir.x+= (random()-.5)*.13;dir.z+=(random()-.5)*.13;dir.y+=.055;dir.normalize();
+    points.push(points.at(-1).clone().addScaledVector(dir,length/4));
+   }
+   branchParts.push(geometryForBranch(points,radius,radius*.22));
+   if(depth===0){tips.push({point:points.at(-1),direction:dir});tips.push({point:points[3],direction:dir});return;}
+   for(let j=0;j<3;j++){
+    const at=j===0?points[3]:points[4],az=random()*TAU;
+    const next=dir.clone().multiplyScalar(.48).add(new T.Vector3(Math.cos(az)*.65,.2+random()*.5,Math.sin(az)*.65)).normalize();
+    branch(at,next,length*(.53+random()*.17),radius*.48,depth-1);
    }
   }
-  branch(new T.Vector3(),new T.Vector3(-.05,1,.03).normalize(),1.48,.19,3);
-  const n=low?520:1100;
-  const leafMat=new T.MeshStandardMaterial({color:0xffffff,roughness:.55,metalness:.12,emissive:0x142b1f,emissiveIntensity:.22});
-  const leaves=new T.InstancedMesh(leafGeo,leafMat,n);leaves.instanceMatrix.setUsage(T.DynamicDrawUsage);leaves.frustumCulled=false;group.add(leaves);
-  const seeds=[];
-  for(let i=0;i<n;i++){
-   const tip=tips[i%tips.length],theta=rng()*Math.PI*2,cos=2*rng()-1,sin=Math.sqrt(1-cos*cos),r=Math.cbrt(rng())*.95;
-   seeds.push({x:tip.x+Math.cos(theta)*sin*r,y:tip.y+cos*r*.8,z:tip.z+Math.sin(theta)*sin*r,size:.05+rng()*.09,phase:rng()*6.28,tone:rng(),drop:rng()});
-   leaves.setColorAt(i,new T.Color().setHSL(.36,.6,.4+rng()*.3));
+  for(let j=0;j<11;j++){
+   const t=.24+j*.063,idx=Math.floor(t*8),start=trunk[idx].clone().lerp(trunk[idx+1],t*8-idx);
+   const az=j*2.399+treeIndex*.7,dir=new T.Vector3(Math.cos(az),.32+t*.8,Math.sin(az)).normalize();
+   branch(start,dir,(2.65-t*1.25)*(1+random()*.2),.115*(1-t*.65),2);
   }
-  trees.push({group,leaves,seeds,bark});
+  for(let j=0;j<6;j++){
+   const az=j/6*TAU;
+   branchParts.push(geometryForBranch([new T.Vector3(Math.cos(az)*.95,-.05,Math.sin(az)*.95),new T.Vector3(Math.cos(az)*.36,.05,Math.sin(az)*.36),new T.Vector3(0,.45,0)],.035,.13));
+  }
+  const bark=new T.Mesh(mergeGeometries(branchParts),surfaces.bark.real);branchParts.forEach(g=>g.dispose());
+  bark.castShadow=true;bark.receiveShadow=true;group.add(bark);
+  const seeds=[],leavesPerTip=low?7:13;
+  for(const tip of tips)for(let j=0;j<leavesPerTip;j++){
+   const spread=.1+random()*.36,az=random()*TAU,y=random()-.3;
+   seeds.push({x:tip.point.x+Math.cos(az)*spread,y:tip.point.y+y*.4,z:tip.point.z+Math.sin(az)*spread,
+    rx:random()*TAU,ry:random()*TAU,rz:random()*TAU,scale:.6+random()*.9,tone:random(),drop:random()});
+  }
+  const leaves=new T.InstancedMesh(leafGeo,surfaces.leaf.real,seeds.length);leaves.frustumCulled=false;leaves.castShadow=true;leaves.receiveShadow=true;leaves.customDepthMaterial=leafDepth;
+  leaves.instanceMatrix.setUsage(T.DynamicDrawUsage);group.add(leaves);
+  const snow=new T.Mesh(bark.geometry,new T.MeshStandardMaterial({color:"#e7edf0",roughness:1,transparent:true,opacity:0,polygonOffset:true,polygonOffsetFactor:-1}));
+  snow.scale.setScalar(1.018);group.add(snow);
+  trees.push({group,bark,leaves,seeds,snow});
  }
- // An atmospheric disc and halo instead of a heavy post-processing pass.
- const sunMat=new T.MeshBasicMaterial({color:SEASONS[0].sun});
- const sun=new T.Mesh(new T.SphereGeometry(.6,32,24),sunMat);sun.position.set(3.7,4.8,-4.5);scene.add(sun);
- const haloMat=new T.ShaderMaterial({uniforms:{tint:{value:new T.Color(SEASONS[0].sun)},strength:{value:.7}},vertexShader:glowVertex,fragmentShader:glowFragment,transparent:true,depthWrite:false,blending:T.AdditiveBlending});
- const halo=new T.Mesh(new T.PlaneGeometry(7,7),haloMat);halo.position.copy(sun.position);scene.add(halo);
- const starCount=low?160:400,starPos=new Float32Array(starCount*3);
- for(let i=0;i<starCount;i++){starPos[i*3]=(rng()-.5)*35;starPos[i*3+1]=rng()*15-1;starPos[i*3+2]=-8-rng()*16}
- const starGeo=new T.BufferGeometry();starGeo.setAttribute("position",new T.BufferAttribute(starPos,3));
- const stars=new T.Points(starGeo,new T.PointsMaterial({color:0xb9dfed,size:.028,transparent:true,opacity:.55,depthWrite:false}));scene.add(stars);
- const particleCount=low?180:500;const positions=new Float32Array(particleCount*3);const rainPos=new Float32Array(particleCount*6);const particleSeeds=[];
- for(let i=0;i<particleCount;i++)particleSeeds.push({x:(rng()-.5)*13,y:rng()*9,z:(rng()-.5)*7,phase:rng()*6.28,speed:.5+rng()});
- const pGeo=new T.BufferGeometry();pGeo.setAttribute("position",new T.BufferAttribute(positions,3));
- const pMat=new T.ShaderMaterial({uniforms:{tint:{value:new T.Color(0xffd7db)},size:{value:5},alpha:{value:.85}},transparent:true,depthWrite:false,blending:T.AdditiveBlending,
-  vertexShader:"uniform float size;void main(){vec4 p=modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(size*14./-p.z,1.,12.);gl_Position=projectionMatrix*p;}",
-  fragmentShader:"uniform vec3 tint;uniform float alpha;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;gl_FragColor=vec4(tint,(1.-d*d)*alpha);}"});
- const particles=new T.Points(pGeo,pMat);particles.frustumCulled=false;scene.add(particles);
- const rainGeo=new T.BufferGeometry();rainGeo.setAttribute("position",new T.BufferAttribute(rainPos,3));
- const rainMat=new T.LineBasicMaterial({color:0x9dcde8,transparent:true,opacity:0,depthWrite:false});
+ // Grass blades form the clearing, not a floating pedestal.
+ const grassGeo=new T.PlaneGeometry(.065,.43,1,2);grassGeo.translate(0,.215,0);
+ const grassMat=new T.MeshStandardMaterial({color:"#6f8d49",roughness:1,side:T.DoubleSide});
+ const grass=new T.InstancedMesh(grassGeo,grassMat,low?1600:4800);grass.receiveShadow=true;grass.frustumCulled=false;
+ for(let i=0;i<grass.count;i++){
+  const az=random()*TAU,r=Math.sqrt(random())*14,x=Math.cos(az)*r,z=Math.sin(az)*r;
+  dummy.position.set(x,terrainY(x,z),z);dummy.rotation.set((random()-.5)*.4,random()*TAU, (random()-.5)*.4);dummy.scale.setScalar(.3+random()*.9);dummy.updateMatrix();grass.setMatrixAt(i,dummy.matrix);
+ }
+ scene.add(grass);
+ const count=low?180:440,seeds=[],positions=new Float32Array(count*3),rainPositions=new Float32Array(count*6);
+ for(let i=0;i<count;i++)seeds.push({x:(random()-.5)*24,y:random()*13,z:(random()-.5)*18,phase:random()*TAU,speed:.5+random()});
+ const particlesGeo=new T.BufferGeometry();particlesGeo.setAttribute("position",new T.BufferAttribute(positions,3));
+ const particleMat=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{tint:{value:new T.Color("#ffe4d3")},size:{value:6},alpha:{value:.5}},vertexShader:`
+  uniform float size;void main(){vec4 p=modelViewMatrix*vec4(position,1.);gl_PointSize=clamp(size*18./-p.z,1.,12.);gl_Position=projectionMatrix*p;}
+ `,fragmentShader:`
+  uniform vec3 tint;uniform float alpha;void main(){float d=length(gl_PointCoord-.5);float a=1.-smoothstep(.12,.5,d);gl_FragColor=vec4(tint,a*alpha);}
+ `});
+ const particles=new T.Points(particlesGeo,particleMat);particles.frustumCulled=false;scene.add(particles);
+ const rainGeo=new T.BufferGeometry();rainGeo.setAttribute("position",new T.BufferAttribute(rainPositions,3));
+ const rainMat=new T.LineBasicMaterial({color:"#b3d3df",transparent:true,opacity:0,depthWrite:false});
  const rain=new T.LineSegments(rainGeo,rainMat);rain.frustumCulled=false;scene.add(rain);
- const fallCount=low?55:140;
- const falling=new T.InstancedMesh(leafGeo,new T.MeshStandardMaterial({color:0xf8a352,roughness:.6,metalness:.1}),fallCount);falling.frustumCulled=false;scene.add(falling);
- const fallen=new T.InstancedMesh(leafGeo,new T.MeshStandardMaterial({color:0xb97c43,roughness:.8}),low?70:160);fallen.frustumCulled=false;scene.add(fallen);
+ const falling=new T.InstancedMesh(leafGeo,surfaces.leaf.real,low?45:95);falling.frustumCulled=false;scene.add(falling);
+ const fallen=new T.InstancedMesh(leafGeo,surfaces.leaf.real,low?160:380);fallen.frustumCulled=false;scene.add(fallen);
  for(let i=0;i<fallen.count;i++){
-  const a=rng()*6.28,r=Math.sqrt(rng())*4.6;dummy.position.set(Math.cos(a)*r,-1.12,Math.sin(a)*r*.45);dummy.rotation.set(rng(),rng()*6.28,rng());dummy.scale.set(.1,.016,.055);dummy.updateMatrix();fallen.setMatrixAt(i,dummy.matrix);
+  const az=random()*TAU,r=Math.sqrt(random())*3.1,x=(i%2===0?-2.7:2.8)+Math.cos(az)*r,z=Math.sin(az)*r;
+  dummy.position.set(x,terrainY(x,z)+.025,z);dummy.rotation.set(-Math.PI/2,0,random()*TAU);dummy.scale.setScalar(.45+random()*.65);dummy.updateMatrix();fallen.setMatrixAt(i,dummy.matrix);color.set("#be6c29").lerp(new T.Color("#ddae54"),random());fallen.setColorAt(i,color);
  }
- return{scene,trees,groundMat,light,orbit,sun,sunMat,halo,haloMat,particles,pMat,positions,rain,rainMat,rainPos,particleSeeds,falling,fallen,stars,low};
+ return {scene,assets,grad,wind,surfaces,trees,ground,grass,mountains,sky,disc,light,hemi,fill,particles,particleMat,positions,rain,rainMat,rainPositions,particleSeeds:seeds,falling,fallen,leafDepth,style:"",seasonKey:"",low};
 }
-export function updateGarden(world,phase,time,camera){
- const p=((phase%4)+4)%4,index=Math.floor(p),mix=T.MathUtils.smoothstep(p-index,0,1),a=SEASONS[index],b=SEASONS[(index+1)%4];
- const blend=(key)=>new T.Color(a[key]).lerp(new T.Color(b[key]),mix);
- const weight=(i)=>index===i?1-mix:(index+1)%4===i?mix:0;
- const winter=weight(3),autumn=weight(2),spring=weight(0),summer=weight(1);
- world.scene.background.copy(blend("sky"));world.scene.fog.color.copy(world.scene.background);world.groundMat.color.copy(blend("ground"));
- world.sunMat.color.copy(blend("sun"));world.haloMat.uniforms.tint.value.copy(world.sunMat.color);world.halo.quaternion.copy(camera.quaternion);
- world.light.color.copy(blend("sun"));world.light.intensity=2.7+Math.sin(time*.12)*.25-winter*.6;
- world.sun.position.y=4.7+Math.sin(time*.1)*.25;world.halo.position.copy(world.sun.position);
- const c1=blend("leaf"),c2=blend("second"),dummy=new T.Object3D(),color=new T.Color();
- world.trees.forEach((tree,treeIndex)=>{
-  tree.bark.color.set(0x745e66).lerp(new T.Color(0xb3c8dc),winter*.8);
-  tree.group.rotation.z=Math.sin(time*.55+treeIndex)*.012;
-  tree.seeds.forEach((s,i)=>{
-   let density=T.MathUtils.lerp(a.foliage,b.foliage,mix);
-   if(autumn>.1)density*=s.drop<.28?1-autumn:.95;
-   dummy.position.set(s.x+Math.sin(time*1.2+s.phase)*.035,s.y,s.z+Math.cos(time*.8+s.phase)*.025);
-   dummy.rotation.set(s.phase+Math.sin(time+s.phase)*.12,s.phase*2,time*.08+s.phase);
-   dummy.scale.set(s.size*density,s.size*.22*density,s.size*.6*density);dummy.updateMatrix();tree.leaves.setMatrixAt(i,dummy.matrix);
-   color.copy(c1).lerp(c2,s.tone*.85);tree.leaves.setColorAt(i,color);
-  });
-  tree.leaves.instanceMatrix.needsUpdate=true;tree.leaves.instanceColor.needsUpdate=true;
- });
- world.rainMat.opacity=(spring*.2+summer*.48)*(Math.sin(time*.32)*.5+.5);
- world.pMat.uniforms.tint.value.set(winter>.5?0xe2f2ff:spring>.5?0xffc1de:0xb9fcd6);
- world.pMat.uniforms.size.value=2+spring*3+winter*4;world.pMat.uniforms.alpha.value=.35+spring*.35+winter*.5;
- world.particleSeeds.forEach((s,i)=>{
-  const y=((s.y-time*(winter*.42+spring*.22+.08)*s.speed)%9+9)%9-1;
-  world.positions[i*3]=s.x+Math.sin(time*.35+s.phase)*.6;world.positions[i*3+1]=y;world.positions[i*3+2]=s.z;
-  const rainY=((s.y-time*7*s.speed)%9+9)%9-1,j=i*6;
-  world.rainPos[j]=s.x;world.rainPos[j+1]=rainY;world.rainPos[j+2]=s.z;world.rainPos[j+3]=s.x-.045;world.rainPos[j+4]=rainY+.28;world.rainPos[j+5]=s.z;
- });
- world.particles.geometry.attributes.position.needsUpdate=true;world.rain.geometry.attributes.position.needsUpdate=true;
- world.falling.visible=autumn>.02;world.fallen.visible=autumn>.15;
- world.fallen.scale.setScalar(.3+autumn*.7);
- for(let i=0;i<world.falling.count;i++){
-  const s=world.particleSeeds[i],tree=i%2===0?-1.95:2.1,y=((s.y-time*.75*s.speed)%5+5)%5-1;
-  dummy.position.set(tree+Math.sin(s.phase)*1.5+Math.sin(time*.7+s.phase)*.5,y,s.z*.35);
-  dummy.rotation.set(time*.8+s.phase,time*.6+s.phase,Math.sin(time+s.phase));
-  dummy.scale.set(.12*autumn,.025*autumn,.07*autumn);dummy.updateMatrix();world.falling.setMatrixAt(i,dummy.matrix);
+export function setGardenStyle(w,style){
+ if(!palettes[style])style="real";
+ w.style=style;w.seasonKey="";
+ for(const tree of w.trees){tree.bark.material=w.surfaces.bark[style];tree.leaves.material=w.surfaces.leaf[style];}
+ w.ground.material=w.surfaces.ground[style];w.falling.material=w.fallen.material=w.surfaces.leaf[style];
+ w.sky.visible=style==="real";w.disc.visible=style!=="real";
+ w.light.intensity=style==="real"?3.1:2.2;w.hemi.intensity=style==="ink"?2.8:2.0;
+}
+export function updateGarden(w,state,time){
+ const {from,to,mix}=state,style=w.style||"real",palette=palettes[style],a=palette[from],b=palette[to];
+ const blend=key=>new T.Color(a[key]).lerp(new T.Color(b[key]),mix);
+ const weight=i=>(from===i?1-mix:0)+(to===i?mix:0);
+ const spring=weight(0),summer=weight(1),autumn=weight(2),winter=weight(3);
+ w.wind.value=time;
+ const key=[style,from,to,mix.toFixed(3)].join(":");
+ if(w.seasonKey!==key){
+  w.seasonKey=key;w.scene.background.copy(blend("sky"));w.scene.fog.color.copy(blend("fog"));
+  w.scene.fog.near=style==="ink"?15:22;w.scene.fog.far=style==="ink"?62:85;
+  w.ground.material.color.copy(blend("ground"));
+  w.grass.material.color.copy(blend("ground")).multiplyScalar(style==="real"?.72:.9);
+  w.grass.visible=winter<.95;
+  w.light.color.copy(blend("sun"));w.disc.material.color.copy(blend("sun"));
+  w.sky.material.uniforms.rayleigh.value=1.4+autumn*.7-winter*.4;
+  w.sky.material.uniforms.turbidity.value=3+spring*2+winter*4;
+  w.surfaces.bark[style].color.set(style==="ink"?"#414b47":style==="anime"?"#775750":"#c0ada0");
+  const c1=blend("leaf"),c2=blend("tip"),dummy=new T.Object3D(),color=new T.Color();
+  for(const tree of w.trees){
+   tree.snow.material.opacity=winter*.9;tree.snow.visible=winter>.01;
+   for(let i=0;i<tree.seeds.length;i++){
+    const s=tree.seeds[i];
+    // Individual leaf shedding exposes the full twig structure in winter.
+    const density=Math.max(0,1-winter-autumn*s.drop*.58);
+    const size=s.scale*density*(.82+summer*.18);
+    dummy.position.set(s.x,s.y,s.z);dummy.rotation.set(s.rx,s.ry,s.rz);dummy.scale.setScalar(size);dummy.updateMatrix();tree.leaves.setMatrixAt(i,dummy.matrix);
+    color.copy(c1).lerp(c2,s.tone);tree.leaves.setColorAt(i,color);
+   }
+   tree.leaves.instanceMatrix.needsUpdate=true;tree.leaves.instanceColor.needsUpdate=true;
+  }
+  w.mountains.forEach((m,i)=>m.material.color.set(style==="ink"?"#62716a":"#728b78").lerp(w.scene.fog.color,.2+i*.18));
+  w.falling.visible=autumn>.01||spring>.01;w.fallen.visible=autumn>.01;w.fallen.scale.set(1,Math.max(.01,autumn),1);
+  w.particleMat.uniforms.tint.value.set(style==="ink"?"#8d9282":winter>.5?"#ffffff":spring>.5?"#ffdbe6":"#fff4bd");
  }
- world.falling.instanceMatrix.needsUpdate=true;world.orbit.rotation.y=time*.025;
+ w.trees.forEach((tree,i)=>{tree.group.rotation.z=Math.sin(time*.65+i)*.006+Math.sin(time*.31)*.004;});
+ w.particleMat.uniforms.alpha.value=winter*.95+spring*.5+summer*.2+autumn*.12;
+ w.particleMat.uniforms.size.value=3+winter*4+spring*2;
+ w.rainMat.opacity=(spring*.11+summer*.19)*(.65+Math.sin(time*.19)*.35);
+ for(let i=0;i<w.particleSeeds.length;i++){
+  const s=w.particleSeeds[i],j=i*3,k=i*6;
+  w.positions[j]=s.x+Math.sin(time*.28+s.phase)*.7;
+  w.positions[j+1]=((s.y-time*(.2+winter*.8)*s.speed)%13+13)%13-.1;w.positions[j+2]=s.z;
+  const y=((s.y-time*8*s.speed)%13+13)%13;
+  w.rainPositions[k]=s.x;w.rainPositions[k+1]=y;w.rainPositions[k+2]=s.z;w.rainPositions[k+3]=s.x+.07;w.rainPositions[k+4]=y+.35;w.rainPositions[k+5]=s.z;
+ }
+ w.particles.geometry.attributes.position.needsUpdate=true;w.rain.geometry.attributes.position.needsUpdate=true;
+ const dummy=new T.Object3D(),color=new T.Color();
+ for(let i=0;i<w.falling.count;i++){
+  const s=w.particleSeeds[i],life=((time*.21*s.speed+s.phase)%1+1)%1;
+  dummy.position.set((i%2===0?-2.7:2.8)+Math.sin(s.phase)*2+Math.sin(time*.7+s.phase)*life,5.5*(1-life),Math.cos(s.phase)*2+Math.sin(time*.3)*life);
+  dummy.rotation.set(time+s.phase,time*.7+s.phase,time*.5+s.phase);
+  dummy.scale.setScalar((autumn*.8+spring*.38)*(.6+s.speed*.3));dummy.updateMatrix();w.falling.setMatrixAt(i,dummy.matrix);
+  color.set(spring>autumn?"#efced0":"#c68832");w.falling.setColorAt(i,color);
+ }
+ w.falling.instanceMatrix.needsUpdate=true;w.falling.instanceColor.needsUpdate=true;
 }
-export function disposeGarden(world){
- const geometries=new Set(),materials=new Set();
- world.scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});
- geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
+export function disposeGarden(w){
+ const geometries=new Set(),materials=new Set(),textures=new Set([w.grad,...Object.values(w.assets)]);
+ w.scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});
+ for(const variants of Object.values(w.surfaces))for(const m of Object.values(variants))materials.add(m);
+ materials.add(w.leafDepth);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
 }
